@@ -55,8 +55,8 @@ const GRAVITY = 0.6;
 const JUMP_FORCE = -13;
 const BASE_SPEED = 4;
 const SPEED_STEP = 0.15;
-const OBSTACLE_MIN_GAP = 180;
-const OBSTACLE_MAX_GAP = 300;
+const OBSTACLE_MIN_GAP = 300;
+const OBSTACLE_MAX_GAP = 500;
 
 // ══════════════════════════════════════
 // ── Game state ──
@@ -232,7 +232,7 @@ function spawnObstacle() {
   });
   nextObstacleGap = OBSTACLE_MIN_GAP + Math.random() * (OBSTACLE_MAX_GAP - OBSTACLE_MIN_GAP);
   // Decrease gap as speed increases
-  nextObstacleGap = Math.max(120, nextObstacleGap - (gameSpeed - BASE_SPEED) * 10);
+  nextObstacleGap = Math.max(200, nextObstacleGap - (gameSpeed - BASE_SPEED) * 8);
 }
 
 // ══════════════════════════════════════
@@ -290,7 +290,7 @@ function resetGame() {
   distance = 0;
   gameSpeed = BASE_SPEED;
   obstacleTimer = 0;
-  nextObstacleGap = 200;
+  nextObstacleGap = 350;
   frame = 0;
 }
 
