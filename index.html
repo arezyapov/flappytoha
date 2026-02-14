@@ -210,6 +210,87 @@ lifeImg.src = 'life.png';
 let lifeImgLoaded = false;
 lifeImg.onload = () => { lifeImgLoaded = true; };
 
+// ── Album cover for mini player ──
+const coverImg = new Image();
+coverImg.src = 'cover.png';
+let coverImgLoaded = false;
+coverImg.onload = () => { coverImgLoaded = true; };
+
+// ── Now playing mini-player ──
+const PLAYER_TEXT = 'Сейчас играет: Король и Шут — Охотник (2006, Будь как дома, Путник...)';
+let playerTimer = 0;
+const PLAYER_SHOW = 300; // 5 sec at 60fps
+const PLAYER_FADE = 60; // 1 sec fade
+let playerScrollX = 0;
+
+function showNowPlaying() {
+  playerTimer = PLAYER_SHOW;
+  playerScrollX = 0;
+}
+
+function drawNowPlaying() {
+  if (playerTimer <= 0) return;
+  playerTimer--;
+
+  let alpha = 1;
+  if (playerTimer < PLAYER_FADE) alpha = playerTimer / PLAYER_FADE;
+  if (playerTimer > PLAYER_SHOW - PLAYER_FADE) alpha = (PLAYER_SHOW - playerTimer) / PLAYER_FADE;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const pH = 44, pMargin = 8, pRadius = 10;
+  const pY = H - GROUND_H - pH - pMargin;
+  const pX = pMargin;
+  const pW = W - pMargin * 2;
+
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.75)';
+  ctx.beginPath(); ctx.roundRect(pX, pY, pW, pH, pRadius); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.roundRect(pX, pY, pW, pH, pRadius); ctx.stroke();
+
+  // Cover art
+  const coverSize = 32, coverX = pX + 6, coverY = pY + 6;
+  if (coverImgLoaded) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(coverX, coverY, coverSize, coverSize, 4); ctx.clip();
+    ctx.drawImage(coverImg, coverX, coverY, coverSize, coverSize);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#333';
+    ctx.beginPath(); ctx.roundRect(coverX, coverY, coverSize, coverSize, 4); ctx.fill();
+  }
+
+  // Text area (clipped for marquee)
+  const textX = coverX + coverSize + 8;
+  const textW = pW - (textX - pX) - 8;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(textX, pY, textW, pH); ctx.clip();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '10px -apple-system, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Now Playing', textX, pY + 6);
+
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 11px -apple-system, sans-serif';
+  ctx.textBaseline = 'top';
+  const fullW = ctx.measureText(PLAYER_TEXT).width;
+  if (fullW > textW) {
+    // Marquee scroll
+    playerScrollX += 0.6;
+    const gap = 50;
+    const totalW = fullW + gap;
+    const offset = playerScrollX % totalW;
+    ctx.fillText(PLAYER_TEXT, textX - offset, pY + 22);
+    ctx.fillText(PLAYER_TEXT, textX - offset + totalW, pY + 22);
+  } else {
+    ctx.fillText(PLAYER_TEXT, textX, pY + 22);
+  }
+  ctx.restore();
+
+  ctx.restore();
+}
+
 // ── Smoke particles (for cigarette pickup) ──
 function spawnSmoke() {
   for (let i = 0; i < 50; i++) {
@@ -777,7 +858,7 @@ function gameLoop(timestamp) {
   for (const sp of speedPowerups) if (!sp.collected) drawSpeedPowerup(sp);
   drawGround(); drawParticles();
   if (state !== 'start') drawBird();
-  drawBubble(); drawScore(); drawSpeedIndicator();
+  drawBubble(); drawScore(); drawSpeedIndicator(); drawNowPlaying();
   ctx.restore();
   if (state === 'start') drawStartScreen();
   if (state === 'dead') drawDeadScreen();
@@ -813,6 +894,7 @@ music.volume = 0.6;
 function startMusic() {
   music.currentTime = 0;
   music.play().catch(() => {});
+  showNowPlaying();
 }
 
 function stopMusic() {
