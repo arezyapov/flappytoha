@@ -640,16 +640,13 @@ function drawSpeedPowerup(sp) {
 
 function drawSpeedIndicator() {
   if (speedEffect <= 0 || state !== 'playing') return;
-  const isFast = speedMultiplier > 1;
-  const barW = 80, barH = 6;
-  const bx = W / 2 - barW / 2, by = 95;
   const frac = speedEffect / SPEED_EFFECT_DURATION;
+  const barH = 4;
+  const by = H - GROUND_H - barH;
   ctx.save();
-  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.roundRect(bx, by, barW, barH, 3); ctx.fill();
-  ctx.fillStyle = isFast ? '#ff3c3c' : '#3c8cff';
-  ctx.beginPath(); ctx.roundRect(bx, by, barW * frac, barH, 3); ctx.fill();
-  ctx.font = 'bold 10px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#fff';
-  ctx.fillText(isFast ? '>> УСКОРЕНИЕ >>' : '<< ЗАМЕДЛЕНИЕ <<', W / 2, by - 4);
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = '#ff3c3c';
+  ctx.fillRect(0, by, W * frac, barH);
   ctx.restore();
 }
 
