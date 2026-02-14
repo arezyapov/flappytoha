@@ -322,7 +322,7 @@ function spawnPipe() {
     });
   }
   if (Math.random() < SPEED_POWERUP_SPAWN) {
-    const type = Math.random() < 0.5 ? 'fast' : 'slow';
+    const type = 'fast';
     speedPowerups.push({
       x: W + 10 + PIPE_W / 2 + (Math.random() - 0.5) * 80,
       y: topH + GAP / 2 + (Math.random() - 0.5) * 50,
