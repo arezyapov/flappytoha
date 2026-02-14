@@ -212,15 +212,15 @@ lifeImg.onload = () => { lifeImgLoaded = true; };
 
 // ── Smoke particles (for cigarette pickup) ──
 function spawnSmoke() {
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 50; i++) {
     particles.push({
-      x: bird.x + (Math.random() - 0.5) * 10,
-      y: bird.y - bird.r - Math.random() * 5,
-      vx: (Math.random() - 0.5) * 1.5,
-      vy: -Math.random() * 2 - 0.5,
-      life: 40 + Math.random() * 30,
-      maxLife: 70,
-      r: Math.random() * 6 + 3,
+      x: bird.x + (Math.random() - 0.5) * 16,
+      y: bird.y - bird.r - Math.random() * 8,
+      vx: (Math.random() - 0.5) * 2.5,
+      vy: -Math.random() * 3 - 0.5,
+      life: 50 + Math.random() * 40,
+      maxLife: 90,
+      r: Math.random() * 8 + 3,
       color: 'rgba(200,200,210,',
     });
   }
