@@ -267,6 +267,7 @@ function flap() {
   if (state === 'dead') return;
   bird.vy = FLAP;
   bird.flapFrame = 10;
+  playFart();
   const poopColors = [
     'rgba(139,90,43,',
     'rgba(160,105,50,',
@@ -710,6 +711,15 @@ canvas.addEventListener('mousedown', e => {
   if (state === 'dead') { state = 'start'; resetGame(); }
   else { flap(); }
 });
+
+// ── Fart sounds (on flap) ──
+const fartSounds = [new Audio('fart1.mp3'), new Audio('fart2.mp3'), new Audio('fart3.mp3')];
+fartSounds.forEach(s => { s.volume = 0.7; });
+function playFart() {
+  const s = fartSounds[Math.floor(Math.random() * fartSounds.length)];
+  s.currentTime = 0;
+  s.play().catch(() => {});
+}
 
 // ── MP3 Music Player ──
 const music = new Audio('music.mp3');
