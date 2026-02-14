@@ -240,32 +240,37 @@ function drawNowPlaying() {
   ctx.save();
   ctx.globalAlpha = alpha;
 
-  const pH = 48, pMargin = 10, pRadius = 12;
+  const pH = 50, pMargin = 12;
   const pW = W - pMargin * 2;
   const pX = pMargin;
   const pY = H - GROUND_H - pH - pMargin;
+  const coverSize = 38;
+  const coverX = pX + 6;
+  const coverY = pY + (pH - coverSize) / 2;
+  const textX = coverX + coverSize + 12;
 
-  // Clip everything to the player box
-  ctx.beginPath(); ctx.roundRect(pX, pY, pW, pH, pRadius); ctx.clip();
-
-  // Background
+  // Background rounded rect
   ctx.fillStyle = 'rgba(0,0,0,0.8)';
-  ctx.fillRect(pX, pY, pW, pH);
+  ctx.beginPath(); ctx.roundRect(pX, pY, pW, pH, 12); ctx.fill();
 
   // Cover art
-  const coverSize = 36, coverX = pX + 6, coverY = pY + (pH - coverSize) / 2;
   if (coverImgLoaded) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(coverX, coverY, coverSize, coverSize, 6); ctx.clip();
     ctx.drawImage(coverImg, coverX, coverY, coverSize, coverSize);
+    ctx.restore();
   }
 
-  // Text
-  const textX = coverX + coverSize + 10;
-  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '10px -apple-system, sans-serif';
+  // Title line
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   ctx.fillText(PLAYER_TITLE, textX, pY + pH / 2 - 8);
 
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px -apple-system, sans-serif';
-  ctx.textBaseline = 'middle';
+  // Artist — Track
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px -apple-system, sans-serif';
   ctx.fillText(PLAYER_TEXT, textX, pY + pH / 2 + 8);
 
   ctx.restore();
@@ -838,8 +843,9 @@ function gameLoop(timestamp) {
   for (const sp of speedPowerups) if (!sp.collected) drawSpeedPowerup(sp);
   drawGround(); drawParticles();
   if (state !== 'start') drawBird();
-  drawBubble(); drawScore(); drawSpeedIndicator(); drawNowPlaying();
+  drawBubble(); drawScore(); drawSpeedIndicator();
   ctx.restore();
+  drawNowPlaying();
   if (state === 'start') drawStartScreen();
   if (state === 'dead') drawDeadScreen();
   requestAnimationFrame(gameLoop);
