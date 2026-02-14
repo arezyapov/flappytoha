@@ -304,9 +304,9 @@ function update() {
   frame++;
 
   if (state !== 'playing') {
-    // Animate zombie even in menu
+    // Animate character even in menu
     player.animTimer++;
-    if (player.animTimer >= 5) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % ZOMBIE_FRAMES; }
+    if (player.animTimer >= 5) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
     return;
   }
 
