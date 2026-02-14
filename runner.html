@@ -93,6 +93,83 @@ const player = {
 };
 
 // ══════════════════════════════════════
+// ── Music & Mini Player ──
+// ══════════════════════════════════════
+const music = new Audio('runner_music.mp3');
+music.loop = true;
+music.volume = 0.6;
+
+const coverImg = new Image();
+coverImg.src = 'runner_cover.png';
+let coverLoaded = false;
+coverImg.onload = () => { coverLoaded = true; };
+
+const PLAYER_TITLE = 'Сейчас играет';
+const PLAYER_TEXT = 'Король и Шут — Мертвый анархист';
+let playerTimer = 0;
+const PLAYER_SHOW = 300; // 5 sec at 60fps
+const PLAYER_FADE = 60;  // 1 sec fade
+
+function startMusic() {
+  music.currentTime = 0;
+  music.play().catch(() => {});
+  showNowPlaying();
+}
+function stopMusic() {
+  music.pause();
+  music.currentTime = 0;
+}
+function showNowPlaying() {
+  playerTimer = PLAYER_SHOW;
+}
+
+function drawNowPlaying() {
+  if (playerTimer <= 0) return;
+  playerTimer--;
+
+  let alpha = 1;
+  if (playerTimer < PLAYER_FADE) alpha = playerTimer / PLAYER_FADE;
+  if (playerTimer > PLAYER_SHOW - PLAYER_FADE) alpha = (PLAYER_SHOW - playerTimer) / PLAYER_FADE;
+
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  const pH = 50, pMargin = 12;
+  const pW = W - pMargin * 2;
+  const pX = pMargin;
+  const pY = H - GROUND_H - pH - pMargin;
+  const coverSize = 38;
+  const coverX = pX + 6;
+  const coverY = pY + (pH - coverSize) / 2;
+  const textX = coverX + coverSize + 12;
+
+  // Background
+  ctx.fillStyle = 'rgba(0,0,0,0.8)';
+  ctx.beginPath(); ctx.roundRect(pX, pY, pW, pH, 12); ctx.fill();
+
+  // Cover art
+  if (coverLoaded) {
+    ctx.save();
+    ctx.beginPath(); ctx.roundRect(coverX, coverY, coverSize, coverSize, 6); ctx.clip();
+    ctx.drawImage(coverImg, coverX, coverY, coverSize, coverSize);
+    ctx.restore();
+  }
+
+  // Title
+  ctx.fillStyle = 'rgba(255,255,255,0.5)';
+  ctx.font = '10px -apple-system, sans-serif';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  ctx.fillText(PLAYER_TITLE, textX, pY + pH / 2 - 8);
+
+  // Artist — Track
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 12px -apple-system, sans-serif';
+  ctx.fillText(PLAYER_TEXT, textX, pY + pH / 2 + 8);
+
+  ctx.restore();
+}
+
+// ══════════════════════════════════════
 // ── Background ──
 // ══════════════════════════════════════
 const bgStars = [];
@@ -201,6 +278,7 @@ function jump() {
   if (state === 'start') {
     state = 'playing';
     resetGame();
+    startMusic();
     return;
   }
   if (state === 'dead') return;
@@ -281,6 +359,7 @@ function update() {
   // Collision
   if (checkCollision()) {
     state = 'dead';
+    stopMusic();
     spawnDeathParticles();
     if (score > best) {
       best = score;
@@ -500,6 +579,7 @@ function gameLoop(timestamp) {
   drawScore();
   if (state === 'start') drawStartScreen();
   if (state === 'dead') drawDeadScreen();
+  drawNowPlaying();
 
   requestAnimationFrame(gameLoop);
 }
