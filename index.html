@@ -210,6 +210,21 @@ lifeImg.src = 'life.png';
 let lifeImgLoaded = false;
 lifeImg.onload = () => { lifeImgLoaded = true; };
 
+// ── Zombie runner (background decoration) ──
+const zombieImg = new Image();
+zombieImg.src = 'zombie.png';
+let zombieImgLoaded = false;
+zombieImg.onload = () => { zombieImgLoaded = true; };
+const ZOMBIE_FRAMES = 8;
+const ZOMBIE_FRAME_W = 96;
+const ZOMBIE_FRAME_H = 96;
+const ZOMBIE_SIZE = 40; // display size
+let zombieX = -ZOMBIE_SIZE;
+let zombieFrame = 0;
+let zombieAnimTimer = 0;
+const ZOMBIE_ANIM_SPEED = 6; // frames per animation frame
+const ZOMBIE_RUN_SPEED = 1.2;
+
 // ── Album cover for mini player ──
 const coverImg = new Image();
 coverImg.src = 'cover.png';
@@ -333,6 +348,9 @@ function resetGame() {
   speedMultiplier = 1;
   bubble = { active: false, text: '', timer: 0, cooldown: 0 };
   hunterTriggered = false;
+  zombieX = -ZOMBIE_SIZE;
+  zombieFrame = 0;
+  zombieAnimTimer = 0;
   initBubbleCooldown();
 }
 
@@ -545,6 +563,17 @@ function update() {
 
   for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; }
   particles = particles.filter(p => p.life > 0);
+
+  // Zombie runner
+  if (state === 'playing' || state === 'start') {
+    zombieX += ZOMBIE_RUN_SPEED;
+    if (zombieX > W + ZOMBIE_SIZE) zombieX = -ZOMBIE_SIZE;
+    zombieAnimTimer++;
+    if (zombieAnimTimer >= ZOMBIE_ANIM_SPEED) {
+      zombieAnimTimer = 0;
+      zombieFrame = (zombieFrame + 1) % ZOMBIE_FRAMES;
+    }
+  }
 }
 
 // ── Draw functions ──
@@ -558,6 +587,18 @@ function drawBg() {
     ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalAlpha = 1;
+}
+
+function drawZombie() {
+  if (!zombieImgLoaded) return;
+  const groundY = H - GROUND_H;
+  const drawSize = ZOMBIE_SIZE;
+  const zx = zombieX;
+  const zy = groundY - drawSize + 4; // feet on ground
+  ctx.drawImage(zombieImg,
+    zombieFrame * ZOMBIE_FRAME_W, 0, ZOMBIE_FRAME_W, ZOMBIE_FRAME_H,
+    zx, zy, drawSize, drawSize
+  );
 }
 
 function drawGround() {
@@ -839,7 +880,7 @@ function gameLoop(timestamp) {
   for (const b of bonuses) if (!b.collected) drawBonus(b);
   for (const lp of lifePickups) if (!lp.collected) drawLifePickup(lp);
   for (const sp of speedPowerups) if (!sp.collected) drawSpeedPowerup(sp);
-  drawGround(); drawParticles();
+  drawZombie(); drawGround(); drawParticles();
   if (state !== 'start') drawBird();
   drawBubble(); drawScore(); drawSpeedIndicator();
   ctx.restore();
