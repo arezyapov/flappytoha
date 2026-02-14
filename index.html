@@ -73,12 +73,12 @@ for (let i = 0; i < 100; i++) {
 const birdImg = new Image(); birdImg.src = 'bird.png';
 let birdLoaded = false; birdImg.onload = () => { birdLoaded = true; };
 
-const zombieImg = new Image(); zombieImg.src = 'zombie.png';
-let zombieLoaded = false; zombieImg.onload = () => { zombieLoaded = true; };
+const runnerImg = new Image(); runnerImg.src = 'runner_char.png';
+let runnerLoaded = false; runnerImg.onload = () => { runnerLoaded = true; };
 
 // ── Zombie animation ──
-let zombieFrame = 0, zombieTimer = 0;
-const ZOMBIE_FRAMES = 8, ZOMBIE_FW = 96, ZOMBIE_FH = 96;
+let runnerFrame = 0, runnerTimer = 0;
+const RUNNER_FRAMES = 10, RUNNER_FW = 2048 / 10, RUNNER_FH = 252;
 
 // ── Buttons ──
 const BTN_W = 320, BTN_H = 100, BTN_R = 16;
@@ -133,14 +133,14 @@ function draw() {
 
   // ── Button 2: Мертвый анархист ──
   drawButton(BTN_X, BTN2_Y, BTN_W, BTN_H, 'Мертвый анархист', 'Бесконечный бег', '#3c8cff', hoverBtn === 2);
-  // Zombie preview
-  zombieTimer++;
-  if (zombieTimer >= 6) { zombieTimer = 0; zombieFrame = (zombieFrame + 1) % ZOMBIE_FRAMES; }
-  if (zombieLoaded) {
-    const zx = BTN_X + 50, zy = BTN2_Y + BTN_H / 2;
-    const zs = 52;
-    ctx.drawImage(zombieImg, zombieFrame * ZOMBIE_FW, 0, ZOMBIE_FW, ZOMBIE_FH,
-      zx - zs / 2, zy - zs / 2, zs, zs);
+  // Runner character preview
+  runnerTimer++;
+  if (runnerTimer >= 6) { runnerTimer = 0; runnerFrame = (runnerFrame + 1) % RUNNER_FRAMES; }
+  if (runnerLoaded) {
+    const rx = BTN_X + 50, ry = BTN2_Y + BTN_H / 2;
+    const rs = 58;
+    ctx.drawImage(runnerImg, runnerFrame * RUNNER_FW, 0, RUNNER_FW, RUNNER_FH,
+      rx - rs / 2, ry - rs / 2, rs, rs);
   }
 
   // Footer

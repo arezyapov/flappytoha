@@ -71,24 +71,25 @@ let distance = 0;
 // ══════════════════════════════════════
 // ── Zombie (player) ──
 // ══════════════════════════════════════
-const zombieImg = new Image();
-zombieImg.src = 'zombie.png';
-let zombieLoaded = false;
-zombieImg.onload = () => { zombieLoaded = true; };
+const charImg = new Image();
+charImg.src = 'runner_char.png';
+let charLoaded = false;
+charImg.onload = () => { charLoaded = true; };
 
-const ZOMBIE_FRAMES = 8;
-const ZOMBIE_FW = 96, ZOMBIE_FH = 96;
-const ZOMBIE_DRAW = 80;
-const ZOMBIE_X = 60;
+const CHAR_FRAMES = 10;
+const CHAR_FW = 2048 / 10, CHAR_FH = 252;
+const CHAR_DRAW = 90;
+const CHAR_X = 60;
 
 const player = {
-  y: GROUND_Y - ZOMBIE_DRAW,
+  y: GROUND_Y - CHAR_DRAW,
   vy: 0,
   grounded: true,
   jumps: 0,
   maxJumps: 2,
   animFrame: 0,
   animTimer: 0,
+  frameCount: CHAR_FRAMES,
 };
 
 // ══════════════════════════════════════
@@ -147,7 +148,7 @@ function spawnDust() {
   if (!player.grounded) return;
   for (let i = 0; i < 2; i++) {
     dustParticles.push({
-      x: ZOMBIE_X + ZOMBIE_DRAW * 0.3 + Math.random() * 10,
+      x: CHAR_X + CHAR_DRAW * 0.3 + Math.random() * 10,
       y: GROUND_Y - 2 + Math.random() * 4,
       vx: -Math.random() * 2 - 0.5,
       vy: -Math.random() * 1 - 0.3,
@@ -162,7 +163,7 @@ function spawnDeathParticles() {
   for (let i = 0; i < 20; i++) {
     const a = Math.random() * Math.PI * 2, spd = Math.random() * 4 + 1;
     particles.push({
-      x: ZOMBIE_X + ZOMBIE_DRAW / 2, y: player.y + ZOMBIE_DRAW / 2,
+      x: CHAR_X + CHAR_DRAW / 2, y: player.y + CHAR_DRAW / 2,
       vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
       life: 30 + Math.random() * 20, maxLife: 50,
       r: Math.random() * 4 + 2, color: 'rgba(255,80,80,',
@@ -179,7 +180,7 @@ let groundOffset = 0;
 // ── Game logic ──
 // ══════════════════════════════════════
 function resetGame() {
-  player.y = GROUND_Y - ZOMBIE_DRAW;
+  player.y = GROUND_Y - CHAR_DRAW;
   player.vy = 0;
   player.grounded = true;
   player.jumps = 0;
@@ -211,8 +212,8 @@ function jump() {
 }
 
 function checkCollision() {
-  const px = ZOMBIE_X + 15, py = player.y + 15;
-  const pw = ZOMBIE_DRAW - 30, ph = ZOMBIE_DRAW - 20;
+  const px = CHAR_X + 15, py = player.y + 15;
+  const pw = CHAR_DRAW - 30, ph = CHAR_DRAW - 20;
   for (const o of obstacles) {
     if (px + pw > o.x && px < o.x + o.w && py + ph > o.y && py < o.y + o.h) {
       return true;
@@ -234,8 +235,8 @@ function update() {
   // Player physics
   player.vy += GRAVITY;
   player.y += player.vy;
-  if (player.y >= GROUND_Y - ZOMBIE_DRAW) {
-    player.y = GROUND_Y - ZOMBIE_DRAW;
+  if (player.y >= GROUND_Y - CHAR_DRAW) {
+    player.y = GROUND_Y - CHAR_DRAW;
     player.vy = 0;
     player.grounded = true;
     player.jumps = 0;
@@ -246,7 +247,7 @@ function update() {
   const animSpeed = player.grounded ? 4 : 8;
   if (player.animTimer >= animSpeed) {
     player.animTimer = 0;
-    player.animFrame = (player.animFrame + 1) % ZOMBIE_FRAMES;
+    player.animFrame = (player.animFrame + 1) % CHAR_FRAMES;
   }
 
   // Dust while running
@@ -271,7 +272,7 @@ function update() {
 
   for (const o of obstacles) {
     o.x -= gameSpeed;
-    if (!o.scored && o.x + o.w < ZOMBIE_X) {
+    if (!o.scored && o.x + o.w < CHAR_X) {
       o.scored = true;
     }
   }
@@ -348,14 +349,14 @@ function drawGround() {
 }
 
 function drawPlayer() {
-  if (zombieLoaded) {
-    ctx.drawImage(zombieImg,
-      player.animFrame * ZOMBIE_FW, 0, ZOMBIE_FW, ZOMBIE_FH,
-      ZOMBIE_X, player.y, ZOMBIE_DRAW, ZOMBIE_DRAW
+  if (charLoaded) {
+    ctx.drawImage(charImg,
+      player.animFrame * CHAR_FW, 0, CHAR_FW, CHAR_FH,
+      CHAR_X, player.y, CHAR_DRAW, CHAR_DRAW
     );
   } else {
     ctx.fillStyle = '#e67e22';
-    ctx.fillRect(ZOMBIE_X + 10, player.y + 10, ZOMBIE_DRAW - 20, ZOMBIE_DRAW - 15);
+    ctx.fillRect(CHAR_X + 10, player.y + 10, CHAR_DRAW - 20, CHAR_DRAW - 15);
   }
 }
 
