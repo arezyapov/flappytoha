@@ -217,7 +217,8 @@ let coverImgLoaded = false;
 coverImg.onload = () => { coverImgLoaded = true; };
 
 // ── Now playing mini-player ──
-const PLAYER_TEXT = 'Сейчас играет: Король и Шут — Охотник (2006, Будь как дома, Путник...)';
+const PLAYER_TITLE = 'Сейчас играет';
+const PLAYER_TEXT = 'Король и Шут — Охотник';
 let playerTimer = 0;
 const PLAYER_SHOW = 300; // 5 sec at 60fps
 const PLAYER_FADE = 60; // 1 sec fade
@@ -262,31 +263,15 @@ function drawNowPlaying() {
     ctx.beginPath(); ctx.roundRect(coverX, coverY, coverSize, coverSize, 4); ctx.fill();
   }
 
-  // Text area (clipped for marquee)
+  // Text
   const textX = coverX + coverSize + 8;
-  const textW = pW - (textX - pX) - 8;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(textX, pY, textW, pH); ctx.clip();
-
   ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '10px -apple-system, sans-serif';
-  ctx.textBaseline = 'top';
-  ctx.fillText('Now Playing', textX, pY + 6);
+  ctx.textBaseline = 'middle';
+  ctx.fillText(PLAYER_TITLE, textX, pY + pH / 2 - 7);
 
-  ctx.fillStyle = '#fff'; ctx.font = 'bold 11px -apple-system, sans-serif';
-  ctx.textBaseline = 'top';
-  const fullW = ctx.measureText(PLAYER_TEXT).width;
-  if (fullW > textW) {
-    // Marquee scroll
-    playerScrollX += 0.6;
-    const gap = 50;
-    const totalW = fullW + gap;
-    const offset = playerScrollX % totalW;
-    ctx.fillText(PLAYER_TEXT, textX - offset, pY + 22);
-    ctx.fillText(PLAYER_TEXT, textX - offset + totalW, pY + 22);
-  } else {
-    ctx.fillText(PLAYER_TEXT, textX, pY + 22);
-  }
-  ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 12px -apple-system, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(PLAYER_TEXT, textX, pY + pH / 2 + 8);
 
   ctx.restore();
 }
