@@ -132,6 +132,26 @@ let lifeImgLoaded = false;
 lifeImg.onload = () => { lifeImgLoaded = true; };
 
 // ══════════════════════════════════════
+// ── Zombie Chasers ──
+// ══════════════════════════════════════
+const zombieSprites = [
+  { img: new Image(), loaded: false, frames: 8, fw: 96, fh: 96 },
+  { img: new Image(), loaded: false, frames: 7, fw: 96, fh: 96 },
+  { img: new Image(), loaded: false, frames: 7, fw: 96, fh: 96 },
+];
+zombieSprites[0].img.src = 'zombie1.png';
+zombieSprites[1].img.src = 'zombie2.png';
+zombieSprites[2].img.src = 'zombie3.png';
+zombieSprites.forEach(z => { z.img.onload = () => { z.loaded = true; }; });
+
+const ZOMBIE_DRAW_SIZE = 70;
+const chasers = [
+  { spriteIdx: 0, offsetX: -65,  animFrame: 0, animTimer: 0, animSpeed: 5, phase: 0 },
+  { spriteIdx: 1, offsetX: -120, animFrame: 0, animTimer: 0, animSpeed: 6, phase: 2 },
+  { spriteIdx: 2, offsetX: -170, animFrame: 0, animTimer: 0, animSpeed: 5, phase: 4 },
+];
+
+// ══════════════════════════════════════
 // ── Music & Mini Player ──
 // ══════════════════════════════════════
 const music = new Audio('runner_music.mp3');
@@ -385,6 +405,10 @@ function update() {
     // Animate character even in menu
     player.animTimer++;
     if (player.animTimer >= 5) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
+    for (const ch of chasers) {
+      ch.animTimer++;
+      if (ch.animTimer >= ch.animSpeed) { ch.animTimer = 0; ch.animFrame = (ch.animFrame + 1) % zombieSprites[ch.spriteIdx].frames; }
+    }
     return;
   }
 
@@ -408,6 +432,16 @@ function update() {
 
   // Dust while running
   if (frame % 4 === 0) spawnDust();
+
+  // Zombie chasers animation
+  for (const ch of chasers) {
+    ch.animTimer++;
+    const sp = zombieSprites[ch.spriteIdx];
+    if (ch.animTimer >= ch.animSpeed) {
+      ch.animTimer = 0;
+      ch.animFrame = (ch.animFrame + 1) % sp.frames;
+    }
+  }
 
   // Distance & score
   distance += gameSpeed;
@@ -533,6 +567,19 @@ function drawGround() {
   ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
   for (let x = -groundOffset; x < W; x += 40) {
     ctx.beginPath(); ctx.moveTo(x, GROUND_Y + 15); ctx.lineTo(x + 20, GROUND_Y + 15); ctx.stroke();
+  }
+}
+
+function drawChasers() {
+  for (const ch of chasers) {
+    const sp = zombieSprites[ch.spriteIdx];
+    if (!sp.loaded) continue;
+    const zx = CHAR_X + ch.offsetX;
+    const zy = GROUND_Y - ZOMBIE_DRAW_SIZE;
+    ctx.drawImage(sp.img,
+      ch.animFrame * sp.fw, 0, sp.fw, sp.fh,
+      zx, zy, ZOMBIE_DRAW_SIZE, ZOMBIE_DRAW_SIZE
+    );
   }
 }
 
@@ -736,6 +783,7 @@ function gameLoop(timestamp) {
   drawGround();
   for (const lp of lifePickups) if (!lp.collected) drawLifePickup(lp);
   for (const o of obstacles) drawObstacle(o);
+  drawChasers();
   drawPlayer();
   drawParticles();
   drawScore();
