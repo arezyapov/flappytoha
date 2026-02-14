@@ -67,6 +67,11 @@ let best = parseInt(localStorage.getItem('runner_best') || '0');
 let frame = 0;
 let gameSpeed = BASE_SPEED;
 let distance = 0;
+let lives = 3;
+const MAX_LIVES = 3;
+let invincible = 0;
+let shakeTimer = 0;
+const HURT_DURATION = 30;
 
 // ══════════════════════════════════════
 // ── Zombie (player) ──
@@ -111,6 +116,20 @@ const player = {
   animTimer: 0,
   frameCount: CHAR_FRAMES,
 };
+
+// ── Heart texture for HUD ──
+const heartImg = new Image();
+heartImg.src = 'heart.png';
+let heartImgLoaded = false;
+heartImg.onload = () => { heartImgLoaded = true; };
+
+// ── Life pickups ──
+let lifePickups = [];
+const LIFE_SPAWN_CHANCE = 0.008; // per frame chance when lives < MAX
+const lifeImg = new Image();
+lifeImg.src = 'life.png';
+let lifeImgLoaded = false;
+lifeImg.onload = () => { lifeImgLoaded = true; };
 
 // ══════════════════════════════════════
 // ── Music & Mini Player ──
@@ -268,6 +287,40 @@ function spawnDeathParticles() {
   }
 }
 
+function spawnHitParticles() {
+  for (let i = 0; i < 8; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 3 + 1;
+    particles.push({
+      x: CHAR_X + CHAR_DRAW / 2, y: player.y + CHAR_DRAW / 2,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 20 + Math.random() * 10, maxLife: 30,
+      r: Math.random() * 3 + 1, color: 'rgba(255,100,100,',
+    });
+  }
+}
+
+function spawnSmoke() {
+  const cx = CHAR_X + CHAR_DRAW / 2, cy = player.y + CHAR_DRAW / 2;
+  for (let i = 0; i < 30; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 2.5 + 0.5;
+    particles.push({
+      x: cx, y: cy,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 1,
+      life: 30 + Math.random() * 20, maxLife: 50,
+      r: Math.random() * 5 + 3, color: 'rgba(180,80,220,',
+    });
+  }
+}
+
+function spawnLifePickup() {
+  lifePickups.push({
+    x: W + 20,
+    y: GROUND_Y - 60 - Math.random() * 80,
+    collected: false,
+    bob: Math.random() * Math.PI * 2,
+  });
+}
+
 // ══════════════════════════════════════
 // ── Ground scroll ──
 // ══════════════════════════════════════
@@ -286,12 +339,16 @@ function resetGame() {
   obstacles = [];
   particles = [];
   dustParticles = [];
+  lifePickups = [];
   score = 0;
   distance = 0;
   gameSpeed = BASE_SPEED;
   obstacleTimer = 0;
   nextObstacleGap = 350;
   frame = 0;
+  lives = 3;
+  invincible = 0;
+  shakeTimer = 0;
 }
 
 function jump() {
@@ -310,6 +367,7 @@ function jump() {
 }
 
 function checkCollision() {
+  if (invincible > 0) return false;
   const px = CHAR_X + 15, py = player.y + 15;
   const pw = CHAR_DRAW - 30, ph = CHAR_DRAW - 20;
   for (const o of obstacles) {
@@ -376,14 +434,45 @@ function update() {
   }
   obstacles = obstacles.filter(o => o.x > -60);
 
+  // Life pickups: spawn randomly
+  if (lives < MAX_LIVES && Math.random() < LIFE_SPAWN_CHANCE) {
+    spawnLifePickup();
+  }
+
+  // Life pickups: move & collect
+  for (const lp of lifePickups) {
+    lp.x -= gameSpeed;
+    lp.bob += 0.06;
+    if (!lp.collected) {
+      const dx = (CHAR_X + CHAR_DRAW / 2) - lp.x;
+      const dy = (player.y + CHAR_DRAW / 2) - lp.y;
+      if (Math.sqrt(dx * dx + dy * dy) < CHAR_DRAW / 2 + 20) {
+        lp.collected = true;
+        if (lives < MAX_LIVES) lives++;
+        spawnSmoke();
+      }
+    }
+  }
+  lifePickups = lifePickups.filter(lp => lp.x > -40 && !lp.collected);
+
+  // Invincibility timer
+  if (invincible > 0) invincible--;
+  if (shakeTimer > 0) shakeTimer--;
+
   // Collision
   if (checkCollision()) {
-    state = 'dead';
-    stopMusic();
-    spawnDeathParticles();
-    if (score > best) {
-      best = score;
-      localStorage.setItem('runner_best', String(best));
+    lives--;
+    invincible = 90; // ~1.5 sec invincibility
+    shakeTimer = 10;
+    spawnHitParticles();
+    if (lives <= 0) {
+      state = 'dead';
+      stopMusic();
+      spawnDeathParticles();
+      if (score > best) {
+        best = score;
+        localStorage.setItem('runner_best', String(best));
+      }
     }
   }
 
@@ -448,6 +537,8 @@ function drawGround() {
 }
 
 function drawPlayer() {
+  // Blink when invincible
+  if (invincible > 0 && Math.floor(frame / 4) % 2 === 0) return;
   if (charLoaded) {
     ctx.drawImage(charImg,
       player.animFrame * CHAR_FW, 0, CHAR_FW, CHAR_FH,
@@ -518,6 +609,48 @@ function drawScore() {
   ctx.fillText(score, W / 2 + 2, 32);
   ctx.fillStyle = '#fff';
   ctx.fillText(score, W / 2, 30);
+  // Hearts
+  const heartSize = 24;
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const hx = 14 + i * 30, hy = 12;
+    if (heartImgLoaded) {
+      ctx.save();
+      if (i >= lives) {
+        ctx.globalAlpha = 0.35;
+        ctx.filter = 'brightness(0)';
+      }
+      ctx.drawImage(heartImg, hx, hy, heartSize, heartSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = i < lives ? '#ff4757' : 'rgba(255,255,255,0.15)';
+      ctx.fillRect(hx, hy, heartSize, heartSize);
+    }
+  }
+  ctx.restore();
+}
+
+function drawLifePickup(lp) {
+  ctx.save();
+  const bobY = Math.sin(lp.bob) * 5;
+  ctx.translate(lp.x, lp.y + bobY);
+  // Glow
+  ctx.fillStyle = 'rgba(180,80,220,0.2)';
+  ctx.beginPath(); ctx.arc(0, 0, 22, 0, Math.PI * 2); ctx.fill();
+  // Icon
+  if (lifeImgLoaded) {
+    const h = 38, w = h * (lifeImg.width / lifeImg.height);
+    ctx.drawImage(lifeImg, -w / 2, -h / 2, w, h);
+  } else if (heartImgLoaded) {
+    ctx.drawImage(heartImg, -12, -12, 24, 24);
+  } else {
+    ctx.fillStyle = '#ff4757'; ctx.fillRect(-10, -10, 20, 20);
+  }
+  // +1 label
+  ctx.fillStyle = '#ff4757'; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
+  ctx.font = 'bold 10px -apple-system, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.strokeText('+1', 0, 24); ctx.fillText('+1', 0, 24);
+  if (heartImgLoaded) { ctx.drawImage(heartImg, 6, 17, 14, 14); }
   ctx.restore();
 }
 
@@ -591,14 +724,25 @@ function gameLoop(timestamp) {
     accumulator -= FRAME_DURATION;
   }
 
+  // Screen shake
+  ctx.save();
+  if (shakeTimer > 0) {
+    const sx = (Math.random() - 0.5) * shakeTimer * 1.2;
+    const sy = (Math.random() - 0.5) * shakeTimer * 1.2;
+    ctx.translate(sx, sy);
+  }
+
   drawBg();
   drawGround();
+  for (const lp of lifePickups) if (!lp.collected) drawLifePickup(lp);
   for (const o of obstacles) drawObstacle(o);
   drawPlayer();
   drawParticles();
   drawScore();
   if (state === 'start') drawStartScreen();
   if (state === 'dead') drawDeadScreen();
+
+  ctx.restore();
   drawNowPlaying();
 
   requestAnimationFrame(gameLoop);
