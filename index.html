@@ -639,7 +639,7 @@ function drawDeadScreen() {
   ctx.fillStyle = 'rgba(30,30,50,0.9)'; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 16); ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 28px -apple-system, sans-serif'; ctx.fillText('Game Over', W / 2, py + 40);
+  ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 22px -apple-system, sans-serif'; ctx.fillText('ахахах затралил лалку', W / 2, py + 40);
   ctx.fillStyle = COL.text; ctx.font = '18px -apple-system, sans-serif'; ctx.fillText('Очки: ' + score, W / 2, py + 80);
   ctx.fillStyle = COL.score; ctx.font = 'bold 18px -apple-system, sans-serif'; ctx.fillText('Рекорд: ' + best, W / 2, py + 110);
   const blink = Math.sin(frame * 0.06) * 0.3 + 0.7;
