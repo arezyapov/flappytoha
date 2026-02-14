@@ -150,7 +150,7 @@ const PLAYER_SHOW = 300; // 5 sec at 60fps
 const PLAYER_FADE = 60;  // 1 sec fade
 
 function startMusic() {
-  music.currentTime = 0;
+  music.currentTime = 32;
   music.play().catch(() => {});
   showNowPlaying();
 }
@@ -176,7 +176,7 @@ function drawNowPlaying() {
   const pH = 50, pMargin = 12;
   const pW = W - pMargin * 2;
   const pX = pMargin;
-  const pY = H - GROUND_H - pH - pMargin;
+  const pY = H - pH - pMargin;
   const coverSize = 38;
   const coverX = pX + 6;
   const coverY = pY + (pH - coverSize) / 2;
