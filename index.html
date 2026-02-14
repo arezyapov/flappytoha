@@ -880,7 +880,7 @@ function gameLoop(timestamp) {
   for (const b of bonuses) if (!b.collected) drawBonus(b);
   for (const lp of lifePickups) if (!lp.collected) drawLifePickup(lp);
   for (const sp of speedPowerups) if (!sp.collected) drawSpeedPowerup(sp);
-  drawZombie(); drawGround(); drawParticles();
+  drawGround(); drawZombie(); drawParticles();
   if (state !== 'start') drawBird();
   drawBubble(); drawScore(); drawSpeedIndicator();
   ctx.restore();
