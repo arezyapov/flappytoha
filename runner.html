@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FlappyToha">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>Мертвый анархист</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-user-select: none; user-select: none;
+    cursor: default;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Responsive sizing ──
+const DPR = window.devicePixelRatio || 1;
+const GAME_RATIO = 500 / 750;
+function resize() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  let w, h;
+  if (sw / sh > GAME_RATIO) { h = sh; w = h * GAME_RATIO; } else { w = sw; h = w / GAME_RATIO; }
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  canvas.width = 500 * DPR; canvas.height = 750 * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+const W = 500, H = 750;
+
+// ══════════════════════════════════════
+// ── Constants ──
+// ══════════════════════════════════════
+const GROUND_Y = 580;
+const GROUND_H = H - GROUND_Y;
+const GRAVITY = 0.6;
+const JUMP_FORCE = -13;
+const BASE_SPEED = 4;
+const SPEED_STEP = 0.15;
+const OBSTACLE_MIN_GAP = 180;
+const OBSTACLE_MAX_GAP = 300;
+
+// ══════════════════════════════════════
+// ── Game state ──
+// ══════════════════════════════════════
+let state = 'start'; // start | playing | dead
+let score = 0;
+let best = parseInt(localStorage.getItem('runner_best') || '0');
+let frame = 0;
+let gameSpeed = BASE_SPEED;
+let distance = 0;
+
+// ══════════════════════════════════════
+// ── Zombie (player) ──
+// ══════════════════════════════════════
+const zombieImg = new Image();
+zombieImg.src = 'zombie.png';
+let zombieLoaded = false;
+zombieImg.onload = () => { zombieLoaded = true; };
+
+const ZOMBIE_FRAMES = 8;
+const ZOMBIE_FW = 96, ZOMBIE_FH = 96;
+const ZOMBIE_DRAW = 80;
+const ZOMBIE_X = 60;
+
+const player = {
+  y: GROUND_Y - ZOMBIE_DRAW,
+  vy: 0,
+  grounded: true,
+  jumps: 0,
+  maxJumps: 2,
+  animFrame: 0,
+  animTimer: 0,
+};
+
+// ══════════════════════════════════════
+// ── Background ──
+// ══════════════════════════════════════
+const bgStars = [];
+for (let i = 0; i < 80; i++) {
+  bgStars.push({
+    x: Math.random() * W, y: Math.random() * GROUND_Y * 0.7,
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random() * 0.5 + 0.2,
+    speed: Math.random() * 0.02 + 0.01,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+// Moon
+const MOON_X = 380, MOON_Y = 80, MOON_R = 35;
+
+// ══════════════════════════════════════
+// ── Obstacles ──
+// ══════════════════════════════════════
+let obstacles = [];
+let obstacleTimer = 0;
+let nextObstacleGap = 200;
+
+const OBSTACLE_TYPES = [
+  { name: 'tombstone', w: 30, h: 50 },
+  { name: 'cross', w: 20, h: 65 },
+  { name: 'tombstone_big', w: 40, h: 60 },
+  { name: 'double', w: 55, h: 45 },
+];
+
+function spawnObstacle() {
+  const type = OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)];
+  obstacles.push({
+    x: W + 10,
+    y: GROUND_Y - type.h,
+    w: type.w,
+    h: type.h,
+    type: type.name,
+    scored: false,
+  });
+  nextObstacleGap = OBSTACLE_MIN_GAP + Math.random() * (OBSTACLE_MAX_GAP - OBSTACLE_MIN_GAP);
+  // Decrease gap as speed increases
+  nextObstacleGap = Math.max(120, nextObstacleGap - (gameSpeed - BASE_SPEED) * 10);
+}
+
+// ══════════════════════════════════════
+// ── Particles ──
+// ══════════════════════════════════════
+let particles = [];
+let dustParticles = [];
+
+function spawnDust() {
+  if (!player.grounded) return;
+  for (let i = 0; i < 2; i++) {
+    dustParticles.push({
+      x: ZOMBIE_X + ZOMBIE_DRAW * 0.3 + Math.random() * 10,
+      y: GROUND_Y - 2 + Math.random() * 4,
+      vx: -Math.random() * 2 - 0.5,
+      vy: -Math.random() * 1 - 0.3,
+      life: 15 + Math.random() * 10,
+      maxLife: 25,
+      r: Math.random() * 3 + 1,
+    });
+  }
+}
+
+function spawnDeathParticles() {
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 4 + 1;
+    particles.push({
+      x: ZOMBIE_X + ZOMBIE_DRAW / 2, y: player.y + ZOMBIE_DRAW / 2,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 30 + Math.random() * 20, maxLife: 50,
+      r: Math.random() * 4 + 2, color: 'rgba(255,80,80,',
+    });
+  }
+}
+
+// ══════════════════════════════════════
+// ── Ground scroll ──
+// ══════════════════════════════════════
+let groundOffset = 0;
+
+// ══════════════════════════════════════
+// ── Game logic ──
+// ══════════════════════════════════════
+function resetGame() {
+  player.y = GROUND_Y - ZOMBIE_DRAW;
+  player.vy = 0;
+  player.grounded = true;
+  player.jumps = 0;
+  player.animFrame = 0;
+  player.animTimer = 0;
+  obstacles = [];
+  particles = [];
+  dustParticles = [];
+  score = 0;
+  distance = 0;
+  gameSpeed = BASE_SPEED;
+  obstacleTimer = 0;
+  nextObstacleGap = 200;
+  frame = 0;
+}
+
+function jump() {
+  if (state === 'start') {
+    state = 'playing';
+    resetGame();
+    return;
+  }
+  if (state === 'dead') return;
+  if (player.jumps < player.maxJumps) {
+    player.vy = JUMP_FORCE;
+    player.grounded = false;
+    player.jumps++;
+  }
+}
+
+function checkCollision() {
+  const px = ZOMBIE_X + 15, py = player.y + 15;
+  const pw = ZOMBIE_DRAW - 30, ph = ZOMBIE_DRAW - 20;
+  for (const o of obstacles) {
+    if (px + pw > o.x && px < o.x + o.w && py + ph > o.y && py < o.y + o.h) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function update() {
+  frame++;
+
+  if (state !== 'playing') {
+    // Animate zombie even in menu
+    player.animTimer++;
+    if (player.animTimer >= 5) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % ZOMBIE_FRAMES; }
+    return;
+  }
+
+  // Player physics
+  player.vy += GRAVITY;
+  player.y += player.vy;
+  if (player.y >= GROUND_Y - ZOMBIE_DRAW) {
+    player.y = GROUND_Y - ZOMBIE_DRAW;
+    player.vy = 0;
+    player.grounded = true;
+    player.jumps = 0;
+  }
+
+  // Animation
+  player.animTimer++;
+  const animSpeed = player.grounded ? 4 : 8;
+  if (player.animTimer >= animSpeed) {
+    player.animTimer = 0;
+    player.animFrame = (player.animFrame + 1) % ZOMBIE_FRAMES;
+  }
+
+  // Dust while running
+  if (frame % 4 === 0) spawnDust();
+
+  // Distance & score
+  distance += gameSpeed;
+  score = Math.floor(distance / 10);
+
+  // Speed progression
+  gameSpeed = BASE_SPEED + Math.floor(score / 100) * SPEED_STEP;
+
+  // Ground scroll
+  groundOffset = (groundOffset + gameSpeed) % 40;
+
+  // Obstacles
+  obstacleTimer += gameSpeed;
+  if (obstacleTimer >= nextObstacleGap) {
+    spawnObstacle();
+    obstacleTimer = 0;
+  }
+
+  for (const o of obstacles) {
+    o.x -= gameSpeed;
+    if (!o.scored && o.x + o.w < ZOMBIE_X) {
+      o.scored = true;
+    }
+  }
+  obstacles = obstacles.filter(o => o.x > -60);
+
+  // Collision
+  if (checkCollision()) {
+    state = 'dead';
+    spawnDeathParticles();
+    if (score > best) {
+      best = score;
+      localStorage.setItem('runner_best', String(best));
+    }
+  }
+
+  // Particles
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; }
+  particles = particles.filter(p => p.life > 0);
+  for (const d of dustParticles) { d.x += d.vx; d.y += d.vy; d.life--; }
+  dustParticles = dustParticles.filter(d => d.life > 0);
+}
+
+// ══════════════════════════════════════
+// ── Drawing ──
+// ══════════════════════════════════════
+function drawBg() {
+  const grad = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
+  grad.addColorStop(0, '#0a0a1a');
+  grad.addColorStop(0.4, '#111128');
+  grad.addColorStop(1, '#1a1a35');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, GROUND_Y);
+
+  // Stars
+  for (const s of bgStars) {
+    const tw = Math.sin(frame * s.speed + s.phase) * 0.3 + 0.7;
+    ctx.globalAlpha = s.a * tw;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Moon
+  ctx.fillStyle = '#f5e6b8';
+  ctx.beginPath(); ctx.arc(MOON_X, MOON_Y, MOON_R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#0a0a1a';
+  ctx.beginPath(); ctx.arc(MOON_X + 10, MOON_Y - 8, MOON_R - 4, 0, Math.PI * 2); ctx.fill();
+
+  // Far hills
+  ctx.fillStyle = '#12122a';
+  ctx.beginPath();
+  ctx.moveTo(0, GROUND_Y);
+  for (let x = 0; x <= W; x += 5) {
+    const hill = Math.sin(x * 0.008 + 1) * 40 + Math.sin(x * 0.015) * 20;
+    ctx.lineTo(x, GROUND_Y - 60 - hill);
+  }
+  ctx.lineTo(W, GROUND_Y); ctx.closePath(); ctx.fill();
+}
+
+function drawGround() {
+  // Main ground
+  ctx.fillStyle = '#2c3e50';
+  ctx.fillRect(0, GROUND_Y, W, GROUND_H);
+
+  // Ground line
+  ctx.fillStyle = '#4a6274';
+  ctx.fillRect(0, GROUND_Y, W, 3);
+
+  // Ground dashes
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 1;
+  for (let x = -groundOffset; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, GROUND_Y + 15); ctx.lineTo(x + 20, GROUND_Y + 15); ctx.stroke();
+  }
+}
+
+function drawPlayer() {
+  if (zombieLoaded) {
+    ctx.drawImage(zombieImg,
+      player.animFrame * ZOMBIE_FW, 0, ZOMBIE_FW, ZOMBIE_FH,
+      ZOMBIE_X, player.y, ZOMBIE_DRAW, ZOMBIE_DRAW
+    );
+  } else {
+    ctx.fillStyle = '#e67e22';
+    ctx.fillRect(ZOMBIE_X + 10, player.y + 10, ZOMBIE_DRAW - 20, ZOMBIE_DRAW - 15);
+  }
+}
+
+function drawObstacle(o) {
+  ctx.save();
+  if (o.type === 'tombstone' || o.type === 'tombstone_big') {
+    // Tombstone
+    ctx.fillStyle = '#556677';
+    ctx.beginPath();
+    ctx.roundRect(o.x, o.y, o.w, o.h, [8, 8, 0, 0]);
+    ctx.fill();
+    ctx.strokeStyle = '#445566'; ctx.lineWidth = 1.5; ctx.stroke();
+    // Cross on tombstone
+    ctx.strokeStyle = '#778899'; ctx.lineWidth = 2;
+    const cx = o.x + o.w / 2;
+    ctx.beginPath(); ctx.moveTo(cx, o.y + 10); ctx.lineTo(cx, o.y + o.h - 10); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(cx - 8, o.y + 20); ctx.lineTo(cx + 8, o.y + 20); ctx.stroke();
+    // R.I.P.
+    ctx.fillStyle = '#8899aa'; ctx.font = '8px -apple-system, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('R.I.P.', cx, o.y + o.h - 14);
+  } else if (o.type === 'cross') {
+    // Wooden cross
+    ctx.fillStyle = '#6b4e37';
+    ctx.fillRect(o.x + o.w / 2 - 4, o.y, 8, o.h);
+    ctx.fillRect(o.x, o.y + 15, o.w, 8);
+    ctx.strokeStyle = '#5a3d26'; ctx.lineWidth = 1;
+    ctx.strokeRect(o.x + o.w / 2 - 4, o.y, 8, o.h);
+    ctx.strokeRect(o.x, o.y + 15, o.w, 8);
+  } else if (o.type === 'double') {
+    // Two small tombstones
+    ctx.fillStyle = '#556677';
+    ctx.beginPath(); ctx.roundRect(o.x, o.y + 10, 22, 35, [6, 6, 0, 0]); ctx.fill();
+    ctx.beginPath(); ctx.roundRect(o.x + 28, o.y, 26, 45, [6, 6, 0, 0]); ctx.fill();
+    ctx.strokeStyle = '#445566'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect(o.x, o.y + 10, 22, 35, [6, 6, 0, 0]); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(o.x + 28, o.y, 26, 45, [6, 6, 0, 0]); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const a = (p.life / p.maxLife) * 0.8;
+    ctx.fillStyle = p.color + a + ')';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (p.life / p.maxLife), 0, Math.PI * 2); ctx.fill();
+  }
+  for (const d of dustParticles) {
+    const a = (d.life / d.maxLife) * 0.4;
+    ctx.fillStyle = `rgba(180,170,150,${a})`;
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r * (d.life / d.maxLife), 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawScore() {
+  if (state !== 'playing') return;
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.font = 'bold 48px -apple-system, sans-serif';
+  ctx.fillText(score, W / 2 + 2, 32);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(score, W / 2, 30);
+  ctx.restore();
+}
+
+function drawStartScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 36px -apple-system, sans-serif';
+  ctx.fillText('Мертвый анархист', W / 2, H / 2 - 80);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '15px -apple-system, sans-serif';
+  ctx.fillText('Прыгай через препятствия', W / 2, H / 2 - 40);
+  ctx.fillText('Двойной тап — двойной прыжок', W / 2, H / 2 - 18);
+
+  if (best > 0) {
+    ctx.fillStyle = '#f39c12'; ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillText('Рекорд: ' + best, W / 2, H / 2 + 20);
+  }
+
+  const blink = Math.sin(frame * 0.06) * 0.4 + 0.6;
+  ctx.globalAlpha = blink; ctx.fillStyle = '#fff'; ctx.font = '14px -apple-system, sans-serif';
+  ctx.fillText('Нажмите чтобы начать', W / 2, H / 2 + 65); ctx.globalAlpha = 1;
+
+  // Back to menu
+  const mbw = 120, mbh = 36, mbx = W / 2 - mbw / 2, mby = H / 2 + 110;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(mbx, mby, mbw, mbh, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '13px -apple-system, sans-serif';
+  ctx.fillText('← В меню', W / 2, mby + mbh / 2);
+}
+
+function drawDeadScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
+  const px = W / 2 - 120, py = H / 2 - 110, pw = 240, ph = 220;
+  ctx.fillStyle = 'rgba(30,30,50,0.9)'; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 16); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 22px -apple-system, sans-serif';
+  ctx.fillText('ахахах затралил лалку', W / 2, py + 36);
+  ctx.fillStyle = '#fff'; ctx.font = '18px -apple-system, sans-serif';
+  ctx.fillText('Дистанция: ' + score, W / 2, py + 74);
+  ctx.fillStyle = '#f39c12'; ctx.font = 'bold 18px -apple-system, sans-serif';
+  ctx.fillText('Рекорд: ' + best, W / 2, py + 104);
+  const blink = Math.sin(frame * 0.06) * 0.3 + 0.7;
+  ctx.globalAlpha = blink; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '14px -apple-system, sans-serif';
+  ctx.fillText('Тапните чтобы заново', W / 2, py + 140); ctx.globalAlpha = 1;
+  // Back to menu
+  const mbw = 120, mbh = 32, mbx = W / 2 - mbw / 2, mby = py + ph - 42;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(mbx, mby, mbw, mbh, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '12px -apple-system, sans-serif';
+  ctx.fillText('← В меню', W / 2, mby + mbh / 2);
+}
+
+// ══════════════════════════════════════
+// ── Main loop (60 FPS locked) ──
+// ══════════════════════════════════════
+const TARGET_FPS = 60;
+const FRAME_DURATION = 1000 / TARGET_FPS;
+let lastFrameTime = null;
+let accumulator = 0;
+
+function gameLoop(timestamp) {
+  if (lastFrameTime === null) { lastFrameTime = timestamp; requestAnimationFrame(gameLoop); return; }
+  let delta = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+  if (delta > 200) delta = FRAME_DURATION;
+  accumulator += delta;
+
+  while (accumulator >= FRAME_DURATION) {
+    update();
+    accumulator -= FRAME_DURATION;
+  }
+
+  drawBg();
+  drawGround();
+  for (const o of obstacles) drawObstacle(o);
+  drawPlayer();
+  drawParticles();
+  drawScore();
+  if (state === 'start') drawStartScreen();
+  if (state === 'dead') drawDeadScreen();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ══════════════════════════════════════
+// ── Input ──
+// ══════════════════════════════════════
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: (t.clientX - rect.left) / rect.width * W, y: (t.clientY - rect.top) / rect.height * H };
+}
+
+function isMenuBtnHit(cx, cy) {
+  if (state === 'start') {
+    const mbw = 120, mbh = 36, mbx = W / 2 - mbw / 2, mby = H / 2 + 110;
+    if (cx >= mbx && cx <= mbx + mbw && cy >= mby && cy <= mby + mbh) return true;
+  }
+  if (state === 'dead') {
+    const py = H / 2 - 110, ph = 220;
+    const mbw = 120, mbh = 32, mbx = W / 2 - mbw / 2, mby = py + ph - 42;
+    if (cx >= mbx && cx <= mbx + mbw && cy >= mby && cy <= mby + mbh) return true;
+  }
+  return false;
+}
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const c = canvasCoords(e);
+  if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
+  if (state === 'dead') { state = 'start'; resetGame(); return; }
+  jump();
+}, { passive: false });
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' || e.key === ' ' || e.code === 'ArrowUp') {
+    e.preventDefault();
+    if (state === 'dead') { state = 'start'; resetGame(); return; }
+    jump();
+  }
+  if (e.code === 'Escape') { window.location.href = 'index.html'; }
+});
+
+canvas.addEventListener('mousedown', e => {
+  e.preventDefault();
+  const c = canvasCoords(e);
+  if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
+  if (state === 'dead') { state = 'start'; resetGame(); return; }
+  jump();
+});
+
+// Start
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
