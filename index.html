@@ -73,8 +73,23 @@ for (let i = 0; i < 100; i++) {
 const birdImg = new Image(); birdImg.src = 'bird.png';
 let birdLoaded = false; birdImg.onload = () => { birdLoaded = true; };
 
-const runnerImg = new Image(); runnerImg.src = 'runner_char.png';
-let runnerLoaded = false; runnerImg.onload = () => { runnerLoaded = true; };
+const runnerImgRaw = new Image(); runnerImgRaw.crossOrigin = 'anonymous';
+runnerImgRaw.src = 'runner_char.png';
+let runnerLoaded = false; let runnerImg = null;
+runnerImgRaw.onload = () => {
+  const oc = document.createElement('canvas');
+  oc.width = runnerImgRaw.width; oc.height = runnerImgRaw.height;
+  const ox = oc.getContext('2d');
+  ox.drawImage(runnerImgRaw, 0, 0);
+  const id = ox.getImageData(0, 0, oc.width, oc.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 30 && d[i+1] < 30 && d[i+2] < 30) d[i+3] = 0;
+  }
+  ox.putImageData(id, 0, 0);
+  runnerImg = oc;
+  runnerLoaded = true;
+};
 
 // ── Zombie animation ──
 let runnerFrame = 0, runnerTimer = 0;
