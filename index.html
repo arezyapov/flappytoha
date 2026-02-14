@@ -218,7 +218,7 @@ zombieImg.onload = () => { zombieImgLoaded = true; };
 const ZOMBIE_FRAMES = 8;
 const ZOMBIE_FRAME_W = 96;
 const ZOMBIE_FRAME_H = 96;
-const ZOMBIE_SIZE = 40; // display size
+const ZOMBIE_SIZE = 70; // display size
 let zombieX = -ZOMBIE_SIZE;
 let zombieFrame = 0;
 let zombieAnimTimer = 0;
@@ -590,15 +590,15 @@ function drawBg() {
 }
 
 function drawZombie() {
-  if (!zombieImgLoaded) return;
   const groundY = H - GROUND_H;
-  const drawSize = ZOMBIE_SIZE;
-  const zx = zombieX;
-  const zy = groundY - drawSize + 4; // feet on ground
-  ctx.drawImage(zombieImg,
-    zombieFrame * ZOMBIE_FRAME_W, 0, ZOMBIE_FRAME_W, ZOMBIE_FRAME_H,
-    zx, zy, drawSize, drawSize
-  );
+  if (zombieImgLoaded) {
+    const zx = zombieX;
+    const zy = groundY - ZOMBIE_SIZE * 0.45; // feet on ground line
+    ctx.drawImage(zombieImg,
+      zombieFrame * ZOMBIE_FRAME_W, 0, ZOMBIE_FRAME_W, ZOMBIE_FRAME_H,
+      zx, zy, ZOMBIE_SIZE, ZOMBIE_SIZE
+    );
+  }
 }
 
 function drawGround() {
