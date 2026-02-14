@@ -195,6 +195,12 @@ bonus3Img.src = 'bonus3.png';
 let bonus3ImgLoaded = false;
 bonus3Img.onload = () => { bonus3ImgLoaded = true; };
 
+// ── Heart texture for HUD ──
+const heartImg = new Image();
+heartImg.src = 'heart.png';
+let heartImgLoaded = false;
+heartImg.onload = () => { heartImgLoaded = true; };
+
 // ── Life pickups ──
 let lifePickups = [];
 const LIFE_SPAWN_CHANCE = 0.15;
@@ -565,10 +571,22 @@ function drawScore() {
   ctx.fillStyle = COL.textShadow; ctx.font = 'bold 52px -apple-system, sans-serif';
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   ctx.fillText(score, W / 2 + 2, 42); ctx.fillStyle = COL.text; ctx.fillText(score, W / 2, 40);
-  ctx.font = '22px -apple-system, sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  const heartSize = 24;
   for (let i = 0; i < MAX_LIVES; i++) {
-    ctx.fillStyle = i < lives ? '#ff4757' : 'rgba(255,255,255,0.15)';
-    ctx.fillText('❤', 14 + i * 28, 14);
+    const hx = 14 + i * 30, hy = 12;
+    if (heartImgLoaded) {
+      ctx.save();
+      if (i >= lives) {
+        // Lost heart: draw black silhouette
+        ctx.globalAlpha = 0.35;
+        ctx.filter = 'brightness(0)';
+      }
+      ctx.drawImage(heartImg, hx, hy, heartSize, heartSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = i < lives ? '#ff4757' : 'rgba(255,255,255,0.15)';
+      ctx.fillRect(hx, hy, heartSize, heartSize);
+    }
   }
   ctx.restore();
 }
@@ -580,11 +598,13 @@ function drawLifePickup(lp) {
     const h = 38, w = h * (lifeImg.width / lifeImg.height);
     ctx.drawImage(lifeImg, -w / 2, -h / 2, w, h);
   } else {
-    ctx.fillStyle = '#ff4757'; ctx.font = '24px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('❤', 0, 0);
+    if (heartImgLoaded) { ctx.drawImage(heartImg, -12, -12, 24, 24); }
+    else { ctx.fillStyle = '#ff4757'; ctx.fillRect(-10, -10, 20, 20); }
   }
   ctx.fillStyle = '#ff4757'; ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.lineWidth = 2;
   ctx.font = 'bold 10px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.strokeText('+❤', 0, 24); ctx.fillText('+❤', 0, 24);
+  ctx.strokeText('+1', 0, 24); ctx.fillText('+1', 0, 24);
+  if (heartImgLoaded) { ctx.drawImage(heartImg, 6, 17, 14, 14); }
   ctx.restore();
 }
 
