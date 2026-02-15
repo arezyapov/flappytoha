@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-title" content="FlappyToha">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="manifest" href="manifest.json">
-<title>FlappyToha</title>
+<title>Антон vs. КиШ</title>
 <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');</script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -150,14 +150,14 @@ function draw() {
   // Title
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.fillStyle = '#fff'; ctx.font = 'bold 48px -apple-system, sans-serif';
-  ctx.fillText('FlappyToha', W / 2, 120);
+  ctx.fillText('Антон vs. КиШ', W / 2, 120);
 
   // Subtitle
   ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.font = '14px -apple-system, sans-serif';
-  ctx.fillText('Выбери режим игры', W / 2, 170);
+  ctx.fillText('Выбери режим игры', W / 2, 168);
 
   // ── Button 1: Охотник ──
-  drawButton(BTN_X, BTN1_Y, BTN_W, BTN_H, 'Охотник', 'FlappyBird в стиле КиШ', '#ff6b6b', hoverBtn === 1);
+  drawButton(BTN_X, BTN1_Y, BTN_W, BTN_H, 'Охотник', 'Темнело за окном и наступала ночь...', '#ff6b6b', hoverBtn === 1);
   if (birdLoaded) {
     ctx.save();
     const bx = BTN_X + 46, by = BTN1_Y + BTN_H / 2;
@@ -168,7 +168,7 @@ function draw() {
   }
 
   // ── Button 2: Мертвый анархист ──
-  drawButton(BTN_X, BTN2_Y, BTN_W, BTN_H, 'Мертвый анархист', 'Бесконечный бег', '#3c8cff', hoverBtn === 2);
+  drawButton(BTN_X, BTN2_Y, BTN_W, BTN_H, 'Мертвый анархист', 'ХОЙ!', '#3c8cff', hoverBtn === 2);
   runnerTimer++;
   if (runnerTimer >= 6) { runnerTimer = 0; runnerFrame = (runnerFrame + 1) % RUNNER_FRAMES; }
   if (runnerLoaded) {
@@ -179,7 +179,7 @@ function draw() {
   }
 
   // ── Button 3: На краю ──
-  drawButton(BTN_X, BTN3_Y, BTN_W, BTN_H, 'На краю', 'Doodle Jump', '#f39c12', hoverBtn === 3);
+  drawButton(BTN_X, BTN3_Y, BTN_W, BTN_H, 'На краю', 'Хватит притворяться живым', '#f39c12', hoverBtn === 3);
   doodleTimer++;
   if (doodleTimer >= 6) { doodleTimer = 0; doodleFrame = (doodleFrame + 1) % DOODLE_FRAMES; }
   if (doodleLoaded) {
