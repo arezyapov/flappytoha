@@ -95,11 +95,33 @@ runnerImgRaw.onload = () => {
 let runnerFrame = 0, runnerTimer = 0;
 const RUNNER_FRAMES = 10, RUNNER_FW = 2048 / 10, RUNNER_FH = 252;
 
+// ── Doodle character ──
+const doodleImgRaw = new Image(); doodleImgRaw.crossOrigin = 'anonymous';
+doodleImgRaw.src = 'doodle_char.png';
+let doodleLoaded = false; let doodleImg = null;
+doodleImgRaw.onload = () => {
+  const oc = document.createElement('canvas');
+  oc.width = doodleImgRaw.width; oc.height = doodleImgRaw.height;
+  const ox = oc.getContext('2d');
+  ox.drawImage(doodleImgRaw, 0, 0);
+  const id = ox.getImageData(0, 0, oc.width, oc.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 30 && d[i+1] < 30 && d[i+2] < 30) d[i+3] = 0;
+  }
+  ox.putImageData(id, 0, 0);
+  doodleImg = oc;
+  doodleLoaded = true;
+};
+let doodleFrame = 0, doodleTimer = 0;
+const DOODLE_FRAMES = 8, DOODLE_FW = 128, DOODLE_FH = 217;
+
 // ── Buttons ──
-const BTN_W = 320, BTN_H = 100, BTN_R = 16;
+const BTN_W = 320, BTN_H = 80, BTN_R = 16;
 const BTN_X = W / 2 - BTN_W / 2;
-const BTN1_Y = 320; // Охотник
-const BTN2_Y = 450; // Мертвый анархист
+const BTN1_Y = 260; // Охотник
+const BTN2_Y = 360; // Мертвый анархист
+const BTN3_Y = 460; // На краю
 
 let hoverBtn = null;
 let frame = 0;
@@ -136,11 +158,10 @@ function draw() {
 
   // ── Button 1: Охотник ──
   drawButton(BTN_X, BTN1_Y, BTN_W, BTN_H, 'Охотник', 'FlappyBird в стиле КиШ', '#ff6b6b', hoverBtn === 1);
-  // Bird preview
   if (birdLoaded) {
     ctx.save();
-    const bx = BTN_X + 50, by = BTN1_Y + BTN_H / 2;
-    const bs = 46 + Math.sin(frame * 0.06) * 3;
+    const bx = BTN_X + 46, by = BTN1_Y + BTN_H / 2;
+    const bs = 42 + Math.sin(frame * 0.06) * 3;
     ctx.beginPath(); ctx.arc(bx, by, bs / 2, 0, Math.PI * 2); ctx.clip();
     ctx.drawImage(birdImg, bx - bs / 2, by - bs / 2, bs, bs);
     ctx.restore();
@@ -148,14 +169,24 @@ function draw() {
 
   // ── Button 2: Мертвый анархист ──
   drawButton(BTN_X, BTN2_Y, BTN_W, BTN_H, 'Мертвый анархист', 'Бесконечный бег', '#3c8cff', hoverBtn === 2);
-  // Runner character preview
   runnerTimer++;
   if (runnerTimer >= 6) { runnerTimer = 0; runnerFrame = (runnerFrame + 1) % RUNNER_FRAMES; }
   if (runnerLoaded) {
-    const rx = BTN_X + 50, ry = BTN2_Y + BTN_H / 2;
-    const rs = 58;
+    const rx = BTN_X + 46, ry = BTN2_Y + BTN_H / 2;
+    const rs = 50;
     ctx.drawImage(runnerImg, runnerFrame * RUNNER_FW, 0, RUNNER_FW, RUNNER_FH,
       rx - rs / 2, ry - rs / 2, rs, rs);
+  }
+
+  // ── Button 3: На краю ──
+  drawButton(BTN_X, BTN3_Y, BTN_W, BTN_H, 'На краю', 'Doodle Jump', '#f39c12', hoverBtn === 3);
+  doodleTimer++;
+  if (doodleTimer >= 6) { doodleTimer = 0; doodleFrame = (doodleFrame + 1) % DOODLE_FRAMES; }
+  if (doodleLoaded) {
+    const dx = BTN_X + 46, dy = BTN3_Y + BTN_H / 2;
+    const ds = 55;
+    ctx.drawImage(doodleImg, doodleFrame * DOODLE_FW, 0, DOODLE_FW, DOODLE_FH,
+      dx - ds * 0.35, dy - ds / 2, ds * 0.7, ds);
   }
 
   // Footer
@@ -201,6 +232,7 @@ function hitTest(cx, cy) {
   if (cx >= BTN_X && cx <= BTN_X + BTN_W) {
     if (cy >= BTN1_Y && cy <= BTN1_Y + BTN_H) return 1;
     if (cy >= BTN2_Y && cy <= BTN2_Y + BTN_H) return 2;
+    if (cy >= BTN3_Y && cy <= BTN3_Y + BTN_H) return 3;
   }
   return 0;
 }
@@ -211,6 +243,7 @@ canvas.addEventListener('touchstart', e => {
   const btn = hitTest(c.x, c.y);
   if (btn === 1) window.location.href = 'flappy.html';
   if (btn === 2) window.location.href = 'runner.html';
+  if (btn === 3) window.location.href = 'doodle.html';
 }, { passive: false });
 
 canvas.addEventListener('mousedown', e => {
@@ -218,6 +251,7 @@ canvas.addEventListener('mousedown', e => {
   const btn = hitTest(c.x, c.y);
   if (btn === 1) window.location.href = 'flappy.html';
   if (btn === 2) window.location.href = 'runner.html';
+  if (btn === 3) window.location.href = 'doodle.html';
 });
 
 canvas.addEventListener('mousemove', e => {

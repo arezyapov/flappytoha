@@ -1,9 +1,11 @@
-const CACHE_NAME = 'flappytoha-v28';
+const CACHE_NAME = 'flappytoha-v29';
 const ASSETS = [
   './',
   './index.html',
   './flappy.html',
   './runner.html',
+  './doodle.html',
+  './doodle_char.png',
   './bird.png',
   './hurt.png',
   './pipe.png',

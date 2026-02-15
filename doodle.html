@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FlappyToha">
+<link rel="apple-touch-icon" href="icon-180.png">
+<title>На краю</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #000;
+    font-family: -apple-system, 'SF Pro Display', 'Helvetica Neue', sans-serif;
+    -webkit-user-select: none; user-select: none;
+    cursor: default;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ── Responsive sizing ──
+const DPR = window.devicePixelRatio || 1;
+const GAME_RATIO = 500 / 750;
+function resize() {
+  const sw = window.innerWidth, sh = window.innerHeight;
+  let w, h;
+  if (sw / sh > GAME_RATIO) { h = sh; w = h * GAME_RATIO; } else { w = sw; h = w / GAME_RATIO; }
+  canvas.style.width = w + 'px'; canvas.style.height = h + 'px';
+  canvas.width = 500 * DPR; canvas.height = 750 * DPR;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+resize();
+window.addEventListener('resize', resize);
+
+const W = 500, H = 750;
+
+// ══════════════════════════════════════
+// ── Constants ──
+// ══════════════════════════════════════
+const GRAVITY = 0.35;
+const JUMP_FORCE = -10;
+const PLATFORM_W = 70, PLATFORM_H = 14;
+const PLAYER_W = 60, PLAYER_H = 102; // draw size
+const PLATFORM_COUNT = 8;
+const MAX_PLATFORM_GAP = 120;
+
+// ══════════════════════════════════════
+// ── Game State ──
+// ══════════════════════════════════════
+let state = 'start'; // start | playing | dead
+let score = 0, maxHeight = 0;
+let best = parseInt(localStorage.getItem('doodle_best') || '0');
+let frame = 0;
+let cameraY = 0; // world Y of camera bottom
+
+// ══════════════════════════════════════
+// ── Player ──
+// ══════════════════════════════════════
+const charImgRaw = new Image();
+charImgRaw.crossOrigin = 'anonymous';
+charImgRaw.src = 'doodle_char.png';
+let charLoaded = false;
+let charImg = null;
+charImgRaw.onload = () => {
+  const oc = document.createElement('canvas');
+  oc.width = charImgRaw.width; oc.height = charImgRaw.height;
+  const ox = oc.getContext('2d');
+  ox.drawImage(charImgRaw, 0, 0);
+  const id = ox.getImageData(0, 0, oc.width, oc.height);
+  const d = id.data;
+  for (let i = 0; i < d.length; i += 4) {
+    if (d[i] < 30 && d[i+1] < 30 && d[i+2] < 30) d[i+3] = 0;
+  }
+  ox.putImageData(id, 0, 0);
+  charImg = oc;
+  charLoaded = true;
+};
+
+const CHAR_FRAMES = 8, CHAR_FW = 128, CHAR_FH = 217;
+
+const player = {
+  x: W / 2,
+  y: 0, // world Y (increases upward)
+  vx: 0,
+  vy: 0,
+  facingLeft: false,
+  animFrame: 0,
+  animTimer: 0,
+};
+
+// ── Heart / lives ──
+const heartImg = new Image(); heartImg.src = 'heart.png';
+let heartImgLoaded = false; heartImg.onload = () => { heartImgLoaded = true; };
+let lives = 3;
+const MAX_LIVES = 3;
+let invincible = 0;
+
+// ── Life pickups ──
+const lifeImg = new Image(); lifeImg.src = 'life.png';
+let lifeImgLoaded = false; lifeImg.onload = () => { lifeImgLoaded = true; };
+
+// ══════════════════════════════════════
+// ── Platforms ──
+// ══════════════════════════════════════
+let platforms = [];
+
+function initPlatforms() {
+  platforms = [];
+  // First platform right under player
+  platforms.push({ x: W / 2 - PLATFORM_W / 2, y: -20, type: 'normal', hasLife: false });
+  for (let i = 1; i < PLATFORM_COUNT; i++) {
+    const py = -20 + i * (H / PLATFORM_COUNT);
+    platforms.push(createPlatform(py));
+  }
+}
+
+function createPlatform(worldY) {
+  const x = Math.random() * (W - PLATFORM_W);
+  const r = Math.random();
+  let type = 'normal';
+  const diff = maxHeight / 1000;
+  if (r < Math.min(0.12 + diff * 0.02, 0.3)) type = 'moving';
+  else if (r < Math.min(0.18 + diff * 0.03, 0.4)) type = 'breakable';
+
+  const hasLife = lives < MAX_LIVES && Math.random() < 0.06;
+  return {
+    x, y: worldY, type,
+    moveDir: Math.random() > 0.5 ? 1 : -1,
+    moveSpeed: 1 + Math.random() * 1.5,
+    broken: false,
+    breakTimer: 0,
+    hasLife,
+    lifeCollected: false,
+  };
+}
+
+// ══════════════════════════════════════
+// ── Stars background ──
+// ══════════════════════════════════════
+const bgStars = [];
+for (let i = 0; i < 60; i++) {
+  bgStars.push({
+    x: Math.random() * W, y: Math.random() * H,
+    r: Math.random() * 1.5 + 0.3,
+    a: Math.random() * 0.4 + 0.15,
+    speed: Math.random() * 0.02 + 0.005,
+    phase: Math.random() * Math.PI * 2,
+  });
+}
+
+// ══════════════════════════════════════
+// ── Particles ──
+// ══════════════════════════════════════
+let particles = [];
+
+function spawnJumpParticles(x, y) {
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI * 0.3 + Math.random() * Math.PI * 0.4;
+    const spd = Math.random() * 2 + 0.5;
+    particles.push({
+      x, y: y,
+      vx: Math.cos(a) * spd * (Math.random() > 0.5 ? 1 : -1),
+      vy: Math.sin(a) * spd,
+      life: 15 + Math.random() * 10, maxLife: 25,
+      r: Math.random() * 2.5 + 1, color: 'rgba(255,255,255,',
+    });
+  }
+}
+
+function spawnBreakParticles(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 3 + 1;
+    particles.push({
+      x: x + PLATFORM_W / 2, y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 20 + Math.random() * 10, maxLife: 30,
+      r: Math.random() * 3 + 1, color: 'rgba(160,120,80,',
+    });
+  }
+}
+
+function spawnSmoke(px, py) {
+  for (let i = 0; i < 25; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 2.5 + 0.5;
+    particles.push({
+      x: px, y: py,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd - 1,
+      life: 30 + Math.random() * 20, maxLife: 50,
+      r: Math.random() * 5 + 3, color: 'rgba(180,80,220,',
+    });
+  }
+}
+
+function spawnDeathParticles() {
+  for (let i = 0; i < 20; i++) {
+    const a = Math.random() * Math.PI * 2, spd = Math.random() * 4 + 1;
+    particles.push({
+      x: player.x, y: screenY(player.y),
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 30 + Math.random() * 20, maxLife: 50,
+      r: Math.random() * 4 + 2, color: 'rgba(255,80,80,',
+    });
+  }
+}
+
+// ══════════════════════════════════════
+// ── Game Logic ──
+// ══════════════════════════════════════
+function resetGame() {
+  player.x = W / 2;
+  player.y = 0;
+  player.vx = 0;
+  player.vy = JUMP_FORCE;
+  player.facingLeft = false;
+  player.animFrame = 0;
+  player.animTimer = 0;
+  cameraY = 0;
+  maxHeight = 0;
+  score = 0;
+  lives = 3;
+  invincible = 0;
+  particles = [];
+  initPlatforms();
+}
+
+function screenY(worldY) {
+  return H - 100 - (worldY - cameraY);
+}
+
+function worldFromScreen(sy) {
+  return cameraY + (H - 100 - sy);
+}
+
+function update() {
+  frame++;
+
+  if (state !== 'playing') {
+    player.animTimer++;
+    if (player.animTimer >= 6) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
+    return;
+  }
+
+  // Horizontal control
+  player.x += player.vx;
+  // Wrap around
+  if (player.x < -PLAYER_W / 2) player.x = W + PLAYER_W / 2;
+  if (player.x > W + PLAYER_W / 2) player.x = -PLAYER_W / 2;
+
+  // Facing direction
+  if (player.vx < -0.5) player.facingLeft = true;
+  if (player.vx > 0.5) player.facingLeft = false;
+
+  // Gravity
+  player.vy += GRAVITY;
+  player.y -= player.vy; // y increases upward, vy negative = going up
+
+  // Animation
+  player.animTimer++;
+  const aspd = player.vy < 0 ? 4 : 7;
+  if (player.animTimer >= aspd) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
+
+  // Camera follows player upward
+  const playerScreenY = screenY(player.y);
+  if (playerScreenY < H * 0.4) {
+    cameraY = player.y - (H * 0.6 - 100);
+  }
+
+  // Score based on height
+  if (player.y > maxHeight) {
+    maxHeight = player.y;
+    score = Math.floor(maxHeight / 10);
+  }
+
+  // Platform collision (only when falling)
+  if (player.vy > 0) {
+    for (const p of platforms) {
+      if (p.broken) continue;
+      const sy = screenY(p.y);
+      const psy = screenY(player.y);
+      const playerBottom = psy + PLAYER_H;
+      const prevBottom = playerBottom - player.vy; // approximate previous position
+
+      if (player.x + PLAYER_W / 2 > p.x && player.x - PLAYER_W / 2 < p.x + PLATFORM_W) {
+        if (playerBottom >= sy && playerBottom <= sy + PLATFORM_H + 8 && prevBottom <= sy + 4) {
+          if (p.type === 'breakable') {
+            p.broken = true;
+            p.breakTimer = 20;
+            spawnBreakParticles(p.x, sy);
+          } else {
+            player.vy = JUMP_FORCE;
+            spawnJumpParticles(player.x, sy);
+          }
+        }
+      }
+    }
+  }
+
+  // Moving platforms
+  for (const p of platforms) {
+    if (p.type === 'moving' && !p.broken) {
+      p.x += p.moveDir * p.moveSpeed;
+      if (p.x < 0 || p.x > W - PLATFORM_W) p.moveDir *= -1;
+    }
+    if (p.broken && p.breakTimer > 0) p.breakTimer--;
+  }
+
+  // Life pickups on platforms
+  for (const p of platforms) {
+    if (p.hasLife && !p.lifeCollected && !p.broken) {
+      const sy = screenY(p.y);
+      const psy = screenY(player.y);
+      const dx = player.x - (p.x + PLATFORM_W / 2);
+      const dy = psy - (sy - 30);
+      if (Math.sqrt(dx * dx + dy * dy) < 40) {
+        p.lifeCollected = true;
+        if (lives < MAX_LIVES) lives++;
+        spawnSmoke(player.x, psy);
+      }
+    }
+  }
+
+  // Generate new platforms above
+  const topWorldY = cameraY + H + 100;
+  const highestPlatform = Math.max(...platforms.map(p => p.y));
+  if (highestPlatform < topWorldY) {
+    const gap = 60 + Math.random() * (MAX_PLATFORM_GAP - 60);
+    platforms.push(createPlatform(highestPlatform + gap));
+  }
+
+  // Remove platforms below camera
+  platforms = platforms.filter(p => screenY(p.y) < H + 50);
+
+  // Invincibility
+  if (invincible > 0) invincible--;
+
+  // Particles
+  for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; }
+  particles = particles.filter(p => p.life > 0);
+
+  // Fall off screen = lose life or die
+  if (screenY(player.y) > H + 100) {
+    lives--;
+    if (lives <= 0) {
+      state = 'dead';
+      spawnDeathParticles();
+      if (score > best) {
+        best = score;
+        localStorage.setItem('doodle_best', String(best));
+      }
+    } else {
+      // Respawn on highest visible platform
+      invincible = 90;
+      const visible = platforms.filter(p => !p.broken && screenY(p.y) > 0 && screenY(p.y) < H);
+      if (visible.length > 0) {
+        const target = visible.reduce((a, b) => a.y > b.y ? a : b);
+        player.y = target.y + 50;
+        player.x = target.x + PLATFORM_W / 2;
+      } else {
+        player.y = cameraY + H * 0.5;
+        player.x = W / 2;
+      }
+      player.vy = JUMP_FORCE;
+      player.vx = 0;
+    }
+  }
+
+  // Friction
+  player.vx *= 0.92;
+}
+
+// ══════════════════════════════════════
+// ── Drawing ──
+// ══════════════════════════════════════
+function drawBg() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0a0a1a');
+  grad.addColorStop(0.5, '#111128');
+  grad.addColorStop(1, '#1a1a35');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  for (const s of bgStars) {
+    const tw = Math.sin(frame * s.speed + s.phase) * 0.3 + 0.7;
+    ctx.globalAlpha = s.a * tw;
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawPlatform(p) {
+  if (p.broken && p.breakTimer <= 0) return;
+  const sy = screenY(p.y);
+  if (sy < -20 || sy > H + 20) return;
+
+  ctx.save();
+  if (p.broken) {
+    ctx.globalAlpha = p.breakTimer / 20;
+    ctx.translate(p.x + PLATFORM_W / 2, sy + PLATFORM_H / 2);
+    ctx.rotate((20 - p.breakTimer) * 0.05);
+    ctx.translate(-(p.x + PLATFORM_W / 2), -(sy + PLATFORM_H / 2));
+  }
+
+  if (p.type === 'normal') {
+    ctx.fillStyle = '#4a9e5c';
+    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(p.x + 4, sy + 2, PLATFORM_W - 8, 4);
+  } else if (p.type === 'moving') {
+    ctx.fillStyle = '#3c8cff';
+    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(p.x + 4, sy + 2, PLATFORM_W - 8, 4);
+    // arrows
+    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('◄►', p.x + PLATFORM_W / 2, sy + PLATFORM_H / 2);
+  } else if (p.type === 'breakable') {
+    ctx.fillStyle = '#a0764e';
+    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 4); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+    // Crack lines
+    ctx.beginPath();
+    ctx.moveTo(p.x + PLATFORM_W * 0.3, sy);
+    ctx.lineTo(p.x + PLATFORM_W * 0.4, sy + PLATFORM_H);
+    ctx.moveTo(p.x + PLATFORM_W * 0.7, sy);
+    ctx.lineTo(p.x + PLATFORM_W * 0.6, sy + PLATFORM_H);
+    ctx.stroke();
+  }
+
+  // Life pickup on platform
+  if (p.hasLife && !p.lifeCollected && !p.broken) {
+    const lx = p.x + PLATFORM_W / 2, ly = sy - 25 + Math.sin(frame * 0.06) * 4;
+    ctx.fillStyle = 'rgba(180,80,220,0.2)';
+    ctx.beginPath(); ctx.arc(lx, ly, 16, 0, Math.PI * 2); ctx.fill();
+    if (lifeImgLoaded) {
+      const lh = 28, lw = lh * (lifeImg.width / lifeImg.height);
+      ctx.drawImage(lifeImg, lx - lw / 2, ly - lh / 2, lw, lh);
+    } else if (heartImgLoaded) {
+      ctx.drawImage(heartImg, lx - 10, ly - 10, 20, 20);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawPlayer() {
+  if (invincible > 0 && Math.floor(frame / 4) % 2 === 0) return;
+  const sy = screenY(player.y);
+  if (charLoaded) {
+    ctx.save();
+    ctx.translate(player.x, sy);
+    if (player.facingLeft) ctx.scale(-1, 1);
+    ctx.drawImage(charImg,
+      player.animFrame * CHAR_FW, 0, CHAR_FW, CHAR_FH,
+      -PLAYER_W / 2, 0, PLAYER_W, PLAYER_H
+    );
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#f39c12';
+    ctx.fillRect(player.x - PLAYER_W / 2, sy, PLAYER_W, PLAYER_H);
+  }
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    const a = (p.life / p.maxLife) * 0.8;
+    ctx.fillStyle = p.color + a + ')';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (p.life / p.maxLife), 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+function drawScore() {
+  if (state !== 'playing') return;
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.font = 'bold 48px -apple-system, sans-serif';
+  ctx.fillText(score, W / 2 + 2, 32);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(score, W / 2, 30);
+  // Hearts
+  const heartSize = 24;
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const hx = 14 + i * 30, hy = 12;
+    if (heartImgLoaded) {
+      ctx.save();
+      if (i >= lives) { ctx.globalAlpha = 0.35; ctx.filter = 'brightness(0)'; }
+      ctx.drawImage(heartImg, hx, hy, heartSize, heartSize);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = i < lives ? '#ff4757' : 'rgba(255,255,255,0.15)';
+      ctx.fillRect(hx, hy, heartSize, heartSize);
+    }
+  }
+  ctx.restore();
+}
+
+function drawStartScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#fff'; ctx.font = 'bold 40px -apple-system, sans-serif';
+  ctx.fillText('На краю', W / 2, H / 2 - 80);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.font = '15px -apple-system, sans-serif';
+  ctx.fillText('Наклоняй / свайпай чтобы двигаться', W / 2, H / 2 - 40);
+  ctx.fillText('Прыгай всё выше!', W / 2, H / 2 - 18);
+
+  if (best > 0) {
+    ctx.fillStyle = '#f39c12'; ctx.font = 'bold 16px -apple-system, sans-serif';
+    ctx.fillText('Рекорд: ' + best, W / 2, H / 2 + 20);
+  }
+
+  const blink = Math.sin(frame * 0.06) * 0.4 + 0.6;
+  ctx.globalAlpha = blink; ctx.fillStyle = '#fff'; ctx.font = '14px -apple-system, sans-serif';
+  ctx.fillText('Нажмите чтобы начать', W / 2, H / 2 + 65); ctx.globalAlpha = 1;
+
+  const mbw = 120, mbh = 36, mbx = W / 2 - mbw / 2, mby = H / 2 + 110;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(mbx, mby, mbw, mbh, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '13px -apple-system, sans-serif';
+  ctx.fillText('← В меню', W / 2, mby + mbh / 2);
+}
+
+function drawDeadScreen() {
+  ctx.fillStyle = 'rgba(0,0,0,0.55)'; ctx.fillRect(0, 0, W, H);
+  const px = W / 2 - 120, py = H / 2 - 110, pw = 240, ph = 220;
+  ctx.fillStyle = 'rgba(30,30,50,0.9)'; ctx.beginPath(); ctx.roundRect(px, py, pw, ph, 16); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 22px -apple-system, sans-serif';
+  ctx.fillText('ахахах затралил лалку', W / 2, py + 36);
+  ctx.fillStyle = '#fff'; ctx.font = '18px -apple-system, sans-serif';
+  ctx.fillText('Высота: ' + score, W / 2, py + 74);
+  ctx.fillStyle = '#f39c12'; ctx.font = 'bold 18px -apple-system, sans-serif';
+  ctx.fillText('Рекорд: ' + best, W / 2, py + 104);
+  const blink = Math.sin(frame * 0.06) * 0.3 + 0.7;
+  ctx.globalAlpha = blink; ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.font = '14px -apple-system, sans-serif';
+  ctx.fillText('Тапните чтобы заново', W / 2, py + 140); ctx.globalAlpha = 1;
+  const mbw = 120, mbh = 32, mbx = W / 2 - mbw / 2, mby = py + ph - 42;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.beginPath(); ctx.roundRect(mbx, mby, mbw, mbh, 8); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.globalAlpha = 1; ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '12px -apple-system, sans-serif';
+  ctx.fillText('← В меню', W / 2, mby + mbh / 2);
+}
+
+// ══════════════════════════════════════
+// ── Main loop (60 FPS) ──
+// ══════════════════════════════════════
+const TARGET_FPS = 60, FRAME_DURATION = 1000 / TARGET_FPS;
+let lastFrameTime = null, accumulator = 0;
+
+function gameLoop(timestamp) {
+  if (lastFrameTime === null) { lastFrameTime = timestamp; requestAnimationFrame(gameLoop); return; }
+  let delta = timestamp - lastFrameTime;
+  lastFrameTime = timestamp;
+  if (delta > 200) delta = FRAME_DURATION;
+  accumulator += delta;
+  while (accumulator >= FRAME_DURATION) { update(); accumulator -= FRAME_DURATION; }
+
+  drawBg();
+  for (const p of platforms) drawPlatform(p);
+  drawPlayer();
+  drawParticles();
+  drawScore();
+  if (state === 'start') drawStartScreen();
+  if (state === 'dead') drawDeadScreen();
+
+  requestAnimationFrame(gameLoop);
+}
+
+// ══════════════════════════════════════
+// ── Input ──
+// ══════════════════════════════════════
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches ? e.touches[0] : e;
+  return { x: (t.clientX - rect.left) / rect.width * W, y: (t.clientY - rect.top) / rect.height * H };
+}
+
+function isMenuBtnHit(cx, cy) {
+  if (state === 'start') {
+    const mbw = 120, mbh = 36, mbx = W / 2 - mbw / 2, mby = H / 2 + 110;
+    if (cx >= mbx && cx <= mbx + mbw && cy >= mby && cy <= mby + mbh) return true;
+  }
+  if (state === 'dead') {
+    const py = H / 2 - 110, ph = 220;
+    const mbw = 120, mbh = 32, mbx = W / 2 - mbw / 2, mby = py + ph - 42;
+    if (cx >= mbx && cx <= mbx + mbw && cy >= mby && cy <= mby + mbh) return true;
+  }
+  return false;
+}
+
+// Touch / tilt controls
+let touchStartX = null;
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const c = canvasCoords(e);
+  if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
+  if (state === 'start') { state = 'playing'; resetGame(); return; }
+  if (state === 'dead') { state = 'start'; resetGame(); return; }
+  touchStartX = c.x;
+  // Move toward touch
+  if (c.x < W / 2) player.vx = -6;
+  else player.vx = 6;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (state !== 'playing') return;
+  const c = canvasCoords(e);
+  if (c.x < W * 0.35) player.vx = -6;
+  else if (c.x > W * 0.65) player.vx = 6;
+  else player.vx = (c.x - W / 2) / (W / 2) * 6;
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  touchStartX = null;
+});
+
+canvas.addEventListener('mousedown', e => {
+  const c = canvasCoords(e);
+  if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
+  if (state === 'start') { state = 'playing'; resetGame(); return; }
+  if (state === 'dead') { state = 'start'; resetGame(); return; }
+  if (c.x < W / 2) player.vx = -6;
+  else player.vx = 6;
+});
+
+// Keyboard
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'Space') {
+    e.preventDefault();
+    if (state === 'start') { state = 'playing'; resetGame(); }
+    else if (state === 'dead') { state = 'start'; resetGame(); }
+  }
+  if (e.code === 'Escape') { window.location.href = 'index.html'; }
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Keyboard movement in game loop
+function handleKeys() {
+  if (state !== 'playing') return;
+  if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -6;
+  else if (keys['ArrowRight'] || keys['KeyD']) player.vx = 6;
+}
+
+// Gyroscope / accelerometer
+if (window.DeviceOrientationEvent) {
+  window.addEventListener('deviceorientation', e => {
+    if (state !== 'playing' || e.gamma === null) return;
+    player.vx = Math.max(-8, Math.min(8, e.gamma / 5));
+  });
+}
+
+// Patch update to include key handling
+const origUpdate = update;
+update = function() {
+  handleKeys();
+  origUpdate();
+};
+
+// Init
+initPlatforms();
+requestAnimationFrame(gameLoop);
+</script>
+</body>
+</html>
