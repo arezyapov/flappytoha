@@ -49,8 +49,8 @@ const W = 500, H = 750;
 // ══════════════════════════════════════
 // ── Constants ──
 // ══════════════════════════════════════
-const GRAVITY = 0.35;
-const JUMP_FORCE = -10;
+const GRAVITY = 0.32;
+const JUMP_FORCE = -11;
 const PLATFORM_W = 70, PLATFORM_H = 14;
 const PLAYER_W = 60, PLAYER_H = 102; // draw size
 const PLATFORM_COUNT = 8;
@@ -377,7 +377,7 @@ function update() {
   }
 
   // Friction
-  player.vx *= 0.92;
+  player.vx *= 0.85;
 }
 
 // ══════════════════════════════════════
@@ -602,31 +602,45 @@ function isMenuBtnHit(cx, cy) {
   return false;
 }
 
-// Touch / tilt controls
-let touchStartX = null;
+// ══════════════════════════════════════
+// ── Input: touch position drives movement continuously ──
+// ══════════════════════════════════════
+let touchActive = false;
+let touchX = W / 2; // current finger X in game coords
+let useGyro = false;
+
 canvas.addEventListener('touchstart', e => {
   e.preventDefault();
   const c = canvasCoords(e);
   if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
-  if (state === 'start') { state = 'playing'; resetGame(); return; }
+  if (state === 'start') {
+    state = 'playing'; resetGame();
+    // Request gyroscope on iOS
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission().then(p => {
+        if (p === 'granted') { enableGyro(); useGyro = true; }
+      }).catch(() => {});
+    }
+    return;
+  }
   if (state === 'dead') { state = 'start'; resetGame(); return; }
-  touchStartX = c.x;
-  // Move toward touch
-  if (c.x < W / 2) player.vx = -6;
-  else player.vx = 6;
+  touchActive = true;
+  touchX = c.x;
 }, { passive: false });
 
 canvas.addEventListener('touchmove', e => {
   e.preventDefault();
   if (state !== 'playing') return;
   const c = canvasCoords(e);
-  if (c.x < W * 0.35) player.vx = -6;
-  else if (c.x > W * 0.65) player.vx = 6;
-  else player.vx = (c.x - W / 2) / (W / 2) * 6;
+  touchActive = true;
+  touchX = c.x;
 }, { passive: false });
 
 canvas.addEventListener('touchend', e => {
-  touchStartX = null;
+  touchActive = false;
+});
+canvas.addEventListener('touchcancel', e => {
+  touchActive = false;
 });
 
 canvas.addEventListener('mousedown', e => {
@@ -634,9 +648,15 @@ canvas.addEventListener('mousedown', e => {
   if (isMenuBtnHit(c.x, c.y)) { window.location.href = 'index.html'; return; }
   if (state === 'start') { state = 'playing'; resetGame(); return; }
   if (state === 'dead') { state = 'start'; resetGame(); return; }
-  if (c.x < W / 2) player.vx = -6;
-  else player.vx = 6;
+  touchActive = true;
+  touchX = c.x;
 });
+canvas.addEventListener('mousemove', e => {
+  if (!touchActive) return;
+  const c = canvasCoords(e);
+  touchX = c.x;
+});
+canvas.addEventListener('mouseup', () => { touchActive = false; });
 
 // Keyboard
 const keys = {};
@@ -651,25 +671,46 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// Keyboard movement in game loop
-function handleKeys() {
-  if (state !== 'playing') return;
-  if (keys['ArrowLeft'] || keys['KeyA']) player.vx = -6;
-  else if (keys['ArrowRight'] || keys['KeyD']) player.vx = 6;
-}
-
-// Gyroscope / accelerometer
-if (window.DeviceOrientationEvent) {
+// Gyroscope
+let gyroVx = 0;
+function enableGyro() {
   window.addEventListener('deviceorientation', e => {
-    if (state !== 'playing' || e.gamma === null) return;
-    player.vx = Math.max(-8, Math.min(8, e.gamma / 5));
+    if (e.gamma === null) return;
+    gyroVx = Math.max(-10, Math.min(10, e.gamma / 3));
   });
 }
+// Auto-enable on non-iOS (no permission needed)
+if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') {
+  enableGyro();
+  useGyro = true;
+}
 
-// Patch update to include key handling
+// Continuous input handler — called every frame from update
+function handleInput() {
+  if (state !== 'playing') return;
+
+  // Gyroscope takes priority if available
+  if (useGyro && Math.abs(gyroVx) > 0.5) {
+    player.vx = gyroVx;
+    return;
+  }
+
+  // Keyboard
+  if (keys['ArrowLeft'] || keys['KeyA']) { player.vx = -8; return; }
+  if (keys['ArrowRight'] || keys['KeyD']) { player.vx = 8; return; }
+
+  // Touch: move toward finger position
+  if (touchActive) {
+    const diff = touchX - player.x;
+    // Strong proportional control toward finger
+    player.vx = Math.max(-10, Math.min(10, diff * 0.25));
+  }
+}
+
+// Patch update to include input handling
 const origUpdate = update;
 update = function() {
-  handleKeys();
+  handleInput();
   origUpdate();
 };
 
