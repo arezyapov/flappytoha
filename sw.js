@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flappytoha-v37';
+const CACHE_NAME = 'flappytoha-v38';
 const ASSETS = [
   './',
   './index.html',

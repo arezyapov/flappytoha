@@ -100,16 +100,7 @@ const player = {
   animTimer: 0,
 };
 
-// ── Heart / lives ──
-const heartImg = new Image(); heartImg.src = 'heart.png';
-let heartImgLoaded = false; heartImg.onload = () => { heartImgLoaded = true; };
-let lives = 3;
-const MAX_LIVES = 3;
-let invincible = 0;
-
-// ── Life pickups ──
-const lifeImg = new Image(); lifeImg.src = 'life.png';
-let lifeImgLoaded = false; lifeImg.onload = () => { lifeImgLoaded = true; };
+// (one life only — no hearts/pickups)
 
 // ══════════════════════════════════════
 // ── Music & Mini Player ──
@@ -178,7 +169,7 @@ let platforms = [];
 function initPlatforms() {
   platforms = [];
   // First platform right under player
-  platforms.push({ x: W / 2 - PLATFORM_W / 2, y: -20, type: 'normal', hasLife: false });
+  platforms.push({ x: W / 2 - PLATFORM_W / 2, y: -20, type: 'normal' });
   for (let i = 1; i < PLATFORM_COUNT; i++) {
     const py = -20 + i * (H / PLATFORM_COUNT);
     platforms.push(createPlatform(py));
@@ -202,15 +193,12 @@ function createPlatform(worldY) {
   }
   lastPlatformType = type;
 
-  const hasLife = lives < MAX_LIVES && Math.random() < 0.06;
   return {
     x, y: worldY, type,
     moveDir: Math.random() > 0.5 ? 1 : -1,
     moveSpeed: 1 + Math.random() * 1.5,
     broken: false,
     breakTimer: 0,
-    hasLife,
-    lifeCollected: false,
   };
 }
 
@@ -297,8 +285,6 @@ function resetGame() {
   cameraY = 0;
   maxHeight = 0;
   score = 0;
-  lives = 3;
-  invincible = 0;
   particles = [];
   initPlatforms();
 }
@@ -316,7 +302,7 @@ function update() {
 
   if (state !== 'playing') {
     player.animTimer++;
-    if (player.animTimer >= 6) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
+    if (player.animTimer >= 12) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
     return;
   }
 
@@ -336,7 +322,7 @@ function update() {
 
   // Animation
   player.animTimer++;
-  const aspd = player.vy < 0 ? 4 : 7;
+  const aspd = player.vy < 0 ? 8 : 14;
   if (player.animTimer >= aspd) { player.animTimer = 0; player.animFrame = (player.animFrame + 1) % CHAR_FRAMES; }
 
   // Camera follows player upward
@@ -384,21 +370,6 @@ function update() {
     if (p.broken && p.breakTimer > 0) p.breakTimer--;
   }
 
-  // Life pickups on platforms
-  for (const p of platforms) {
-    if (p.hasLife && !p.lifeCollected && !p.broken) {
-      const sy = screenY(p.y);
-      const psy = screenY(player.y);
-      const dx = player.x - (p.x + PLATFORM_W / 2);
-      const dy = psy - (sy - 30);
-      if (Math.sqrt(dx * dx + dy * dy) < 40) {
-        p.lifeCollected = true;
-        if (lives < MAX_LIVES) lives++;
-        spawnSmoke(player.x, psy);
-      }
-    }
-  }
-
   // Generate new platforms above
   const topWorldY = cameraY + H + 100;
   const highestPlatform = Math.max(...platforms.map(p => p.y));
@@ -411,38 +382,18 @@ function update() {
   // Remove platforms below camera
   platforms = platforms.filter(p => screenY(p.y) < H + 50);
 
-  // Invincibility
-  if (invincible > 0) invincible--;
-
   // Particles
   for (const p of particles) { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; }
   particles = particles.filter(p => p.life > 0);
 
-  // Fall off screen = lose life or die
+  // Fall off screen = instant death
   if (screenY(player.y) > H + 100) {
-    lives--;
-    if (lives <= 0) {
-      state = 'dead';
-      stopMusic();
-      spawnDeathParticles();
-      if (score > best) {
-        best = score;
-        localStorage.setItem('doodle_best', String(best));
-      }
-    } else {
-      // Respawn on highest visible platform
-      invincible = 90;
-      const visible = platforms.filter(p => !p.broken && screenY(p.y) > 0 && screenY(p.y) < H);
-      if (visible.length > 0) {
-        const target = visible.reduce((a, b) => a.y > b.y ? a : b);
-        player.y = target.y + 50;
-        player.x = target.x + PLATFORM_W / 2;
-      } else {
-        player.y = cameraY + H * 0.5;
-        player.x = W / 2;
-      }
-      player.vy = JUMP_FORCE;
-      player.vx = 0;
+    state = 'dead';
+    stopMusic();
+    spawnDeathParticles();
+    if (score > best) {
+      best = score;
+      localStorage.setItem('doodle_best', String(best));
     }
   }
 
@@ -510,24 +461,10 @@ function drawPlatform(p) {
     ctx.stroke();
   }
 
-  // Life pickup on platform
-  if (p.hasLife && !p.lifeCollected && !p.broken) {
-    const lx = p.x + PLATFORM_W / 2, ly = sy - 25 + Math.sin(frame * 0.06) * 4;
-    ctx.fillStyle = 'rgba(180,80,220,0.2)';
-    ctx.beginPath(); ctx.arc(lx, ly, 16, 0, Math.PI * 2); ctx.fill();
-    if (lifeImgLoaded) {
-      const lh = 28, lw = lh * (lifeImg.width / lifeImg.height);
-      ctx.drawImage(lifeImg, lx - lw / 2, ly - lh / 2, lw, lh);
-    } else if (heartImgLoaded) {
-      ctx.drawImage(heartImg, lx - 10, ly - 10, 20, 20);
-    }
-  }
-
   ctx.restore();
 }
 
 function drawPlayer() {
-  if (invincible > 0 && Math.floor(frame / 4) % 2 === 0) return;
   const sy = screenY(player.y);
   if (charLoaded) {
     ctx.save();
@@ -560,20 +497,6 @@ function drawScore() {
   ctx.fillText(score, W / 2 + 2, 32);
   ctx.fillStyle = '#fff';
   ctx.fillText(score, W / 2, 30);
-  // Hearts
-  const heartSize = 24;
-  for (let i = 0; i < MAX_LIVES; i++) {
-    const hx = 14 + i * 30, hy = 12;
-    if (heartImgLoaded) {
-      ctx.save();
-      if (i >= lives) { ctx.globalAlpha = 0.35; ctx.filter = 'brightness(0)'; }
-      ctx.drawImage(heartImg, hx, hy, heartSize, heartSize);
-      ctx.restore();
-    } else {
-      ctx.fillStyle = i < lives ? '#ff4757' : 'rgba(255,255,255,0.15)';
-      ctx.fillRect(hx, hy, heartSize, heartSize);
-    }
-  }
   ctx.restore();
 }
 
