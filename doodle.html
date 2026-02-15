@@ -259,8 +259,8 @@ function update() {
   if (player.x > W + PLAYER_W / 2) player.x = -PLAYER_W / 2;
 
   // Facing direction
-  if (player.vx < -0.5) player.facingLeft = true;
-  if (player.vx > 0.5) player.facingLeft = false;
+  if (player.vx < -0.5) player.facingLeft = false;
+  if (player.vx > 0.5) player.facingLeft = true;
 
   // Gravity
   player.vy += GRAVITY;
