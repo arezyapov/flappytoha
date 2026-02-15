@@ -434,31 +434,65 @@ function drawPlatform(p) {
     ctx.translate(-(p.x + PLATFORM_W / 2), -(sy + PLATFORM_H / 2));
   }
 
+  // ── Phallic platform ──
+  const cx = p.x + PLATFORM_W / 2;
+  const cy = sy + PLATFORM_H / 2;
+  const shaftW = PLATFORM_W * 0.55;
+  const shaftH = PLATFORM_H * 1.1;
+  const headR = PLATFORM_H * 0.7;
+  const ballR = PLATFORM_H * 0.55;
+
+  let baseColor, headColor, ballColor;
   if (p.type === 'normal') {
-    ctx.fillStyle = '#4a9e5c';
-    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 6); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(p.x + 4, sy + 2, PLATFORM_W - 8, 4);
+    baseColor = '#e8a0a0'; headColor = '#d47070'; ballColor = '#d08888';
   } else if (p.type === 'moving') {
-    ctx.fillStyle = '#3c8cff';
-    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 6); ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.2)';
-    ctx.fillRect(p.x + 4, sy + 2, PLATFORM_W - 8, 4);
-    // arrows
-    ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '10px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('◄►', p.x + PLATFORM_W / 2, sy + PLATFORM_H / 2);
-  } else if (p.type === 'breakable') {
-    ctx.fillStyle = '#a0764e';
-    ctx.beginPath(); ctx.roundRect(p.x, sy, PLATFORM_W, PLATFORM_H, 4); ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
-    // Crack lines
+    baseColor = '#a0a0e8'; headColor = '#7070d4'; ballColor = '#8888d0';
+  } else {
+    baseColor = '#c8a878'; headColor = '#a08050'; ballColor = '#b09060';
+  }
+
+  // Shaft
+  ctx.fillStyle = baseColor;
+  ctx.beginPath();
+  ctx.roundRect(cx - shaftW / 2, cy - shaftH / 2, shaftW, shaftH, 3);
+  ctx.fill();
+
+  // Head (left)
+  ctx.fillStyle = headColor;
+  ctx.beginPath();
+  ctx.ellipse(cx - shaftW / 2, cy, headR * 0.9, headR, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Balls (right)
+  ctx.fillStyle = ballColor;
+  const bx = cx + shaftW / 2 + ballR * 0.3;
+  ctx.beginPath();
+  ctx.arc(bx, cy - ballR * 0.55, ballR, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(bx, cy + ballR * 0.55, ballR, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.15)';
+  ctx.beginPath();
+  ctx.ellipse(cx, cy - shaftH * 0.2, shaftW * 0.35, shaftH * 0.2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Breakable cracks
+  if (p.type === 'breakable') {
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(p.x + PLATFORM_W * 0.3, sy);
-    ctx.lineTo(p.x + PLATFORM_W * 0.4, sy + PLATFORM_H);
-    ctx.moveTo(p.x + PLATFORM_W * 0.7, sy);
-    ctx.lineTo(p.x + PLATFORM_W * 0.6, sy + PLATFORM_H);
+    ctx.moveTo(cx - shaftW * 0.15, cy - shaftH * 0.4);
+    ctx.lineTo(cx + shaftW * 0.1, cy + shaftH * 0.4);
     ctx.stroke();
+  }
+
+  // Moving arrows
+  if (p.type === 'moving') {
+    ctx.fillStyle = 'rgba(255,255,255,0.35)'; ctx.font = '8px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('◄►', cx, cy);
   }
 
   ctx.restore();
