@@ -53,8 +53,8 @@ const GRAVITY = 0.32;
 const JUMP_FORCE = -11;
 const PLATFORM_W = 70, PLATFORM_H = 14;
 const PLAYER_W = 60, PLAYER_H = 95; // draw size (matches 435:692 ratio)
-const PLATFORM_COUNT = 8;
-const MAX_PLATFORM_GAP = 120;
+const PLATFORM_COUNT = 10;
+const MAX_PLATFORM_GAP = 90;
 
 // ══════════════════════════════════════
 // ── Game State ──
@@ -126,13 +126,22 @@ function initPlatforms() {
   }
 }
 
+let lastPlatformType = 'normal';
 function createPlatform(worldY) {
   const x = Math.random() * (W - PLATFORM_W);
   const r = Math.random();
   let type = 'normal';
   const diff = maxHeight / 1000;
-  if (r < Math.min(0.12 + diff * 0.02, 0.3)) type = 'moving';
-  else if (r < Math.min(0.18 + diff * 0.03, 0.4)) type = 'breakable';
+
+  // Never place breakable right after breakable
+  if (lastPlatformType !== 'breakable') {
+    if (r < Math.min(0.10 + diff * 0.01, 0.2)) type = 'moving';
+    else if (r < Math.min(0.14 + diff * 0.015, 0.25)) type = 'breakable';
+  } else {
+    // After breakable — only normal or moving (safe to land on)
+    if (r < Math.min(0.15 + diff * 0.01, 0.25)) type = 'moving';
+  }
+  lastPlatformType = type;
 
   const hasLife = lives < MAX_LIVES && Math.random() < 0.06;
   return {
@@ -335,7 +344,8 @@ function update() {
   const topWorldY = cameraY + H + 100;
   const highestPlatform = Math.max(...platforms.map(p => p.y));
   if (highestPlatform < topWorldY) {
-    const gap = 60 + Math.random() * (MAX_PLATFORM_GAP - 60);
+    const minGap = 40;
+    const gap = minGap + Math.random() * (MAX_PLATFORM_GAP - minGap);
     platforms.push(createPlatform(highestPlatform + gap));
   }
 
